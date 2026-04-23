@@ -47,7 +47,22 @@ export function extractFromOcrText(text: string, keywords?: string[]): OcrExtrac
 
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
   const japaneseLines = lines.filter(l => /[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9fff]/.test(l))
-  const title = japaneseLines.sort((a, b) => b.length - a.length)[0] ?? lines[0]
+
+  // Prefer lines that appear before the price in the document (titles are above prices)
+  const priceLineIdx = priceMatch
+    ? lines.findIndex(l => l.includes(priceMatch[0]))
+    : -1
+
+  const candidateLines = priceLineIdx > 0
+    ? japaneseLines.filter(l => lines.indexOf(l) < priceLineIdx)
+    : japaneseLines
+
+  const title = candidateLines
+    .filter(l => l.length > 5) // ignore short UI labels
+    .sort((a, b) => b.length - a.length)[0]
+    ?? japaneseLines[0]
+    ?? lines[0]
+
   if (title) confidence.title = japaneseLines.length > 0 ? 'medium' : 'low'
 
   return { title, price, listingId, manufacturer, seriesName, janCode, confidence }
@@ -71,8 +86,15 @@ export async function preprocessImageForOcr(file: File): Promise<Blob> {
     const url = URL.createObjectURL(file)
     img.onload = () => {
       URL.revokeObjectURL(url)
+      // For wide landscape screenshots (e.g. Mercari desktop), crop the right 55%
+      // where the product title/price panel lives.
+      const isLandscape = img.width > img.height * 1.3
+      const cropX = isLandscape ? Math.floor(img.width * 0.45) : 0
+      const cropWidth = img.width - cropX
+
       const MIN_WIDTH = 1200
-      let { width, height } = img
+      let width = cropWidth
+      let height = img.height
       if (width < MIN_WIDTH) {
         const scale = MIN_WIDTH / width
         width = MIN_WIDTH
@@ -83,15 +105,13 @@ export async function preprocessImageForOcr(file: File): Promise<Blob> {
       canvas.height = height
       const ctx = canvas.getContext('2d')
       if (!ctx) { reject(new Error('No canvas context')); return }
-      ctx.drawImage(img, 0, 0, width, height)
+      ctx.drawImage(img, cropX, 0, cropWidth, img.height, 0, 0, width, height)
       const imageData = ctx.getImageData(0, 0, width, height)
       const d = imageData.data
       for (let i = 0; i < d.length; i += 4) {
-        // Contrast boost
         const r = Math.min(255, Math.max(0, (d[i]   - 128) * 1.5 + 128))
         const g = Math.min(255, Math.max(0, (d[i+1] - 128) * 1.5 + 128))
         const b = Math.min(255, Math.max(0, (d[i+2] - 128) * 1.5 + 128))
-        // Grayscale
         const gray = 0.299 * r + 0.587 * g + 0.114 * b
         d[i] = d[i+1] = d[i+2] = gray
       }

@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json() as { imageBase64: string; mode: 'screenshot' | 'photo' }
-    const { imageBase64, mode } = body
+    const body = await req.json() as { imageBase64: string; mode?: string }
+    const { imageBase64 } = body
     const apiKey = req.headers.get('x-vision-api-key')
     if (!apiKey) {
       return NextResponse.json({ error: 'No Vision API key provided' }, { status: 400 })
     }
-    const feature = mode === 'photo' ? 'DOCUMENT_TEXT_DETECTION' : 'TEXT_DETECTION'
+    const feature = 'DOCUMENT_TEXT_DETECTION'
     const visionRes = await fetch(
       `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`,
       {

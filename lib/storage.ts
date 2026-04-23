@@ -126,6 +126,31 @@ export function updateDiscoveryItem(id: string, updates: Partial<DiscoveryItem>)
   }
 }
 
+export function mergeWishlist(incoming: WishlistItem[]): void {
+  const existing = getWishlist()
+  const map = new Map(existing.map(i => [i.id, i]))
+  for (const item of incoming) map.set(item.id, item)
+  saveWishlist(Array.from(map.values()))
+}
+
+export function mergeProfile(incoming: Partial<InterestProfile>): void {
+  const existing = getProfile()
+  const merged = { ...existing }
+  ;(Object.keys(incoming) as (keyof InterestProfile)[]).forEach(key => {
+    if (incoming[key] !== undefined) {
+      (merged[key] as InterestProfile[typeof key]) = incoming[key]!
+    }
+  })
+  saveProfile(merged)
+}
+
+export function mergeDiscoveryItems(incoming: DiscoveryItem[]): void {
+  const existing = getDiscoveryItems()
+  const map = new Map(existing.map(i => [i.id, i]))
+  for (const item of incoming) map.set(item.id, item)
+  saveDiscoveryItems(Array.from(map.values()))
+}
+
 export function getVisionApiKey(): string {
   return getItem<string>('jp-shopping-intel:vision-api-key', '')
 }

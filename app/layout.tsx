@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import "./globals.css";
 import Navigation from "@/components/Navigation";
 import ClientWidgets from "@/components/ClientWidgets";
@@ -6,6 +7,16 @@ import ClientWidgets from "@/components/ClientWidgets";
 export const metadata: Metadata = {
   title: "JP Shopping Intel",
   description: "Personal Japanese shopping tracker with OCR import, wishlist, and discovery",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "JP Shopping Intel",
+  },
+  icons: {
+    apple: "/icon-192.png",
+    icon: "/icon-192.png",
+  },
 };
 
 export const viewport: Viewport = {
@@ -25,6 +36,11 @@ export default function RootLayout({
           {children}
         </main>
         <ClientWidgets />
+        <Script id="sw-register" strategy="afterInteractive">{`
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js').catch(() => {})
+          }
+        `}</Script>
       </body>
     </html>
   );
