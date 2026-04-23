@@ -8,8 +8,11 @@ const NAV_LINKS = [
   { href: '/', label: 'Dashboard' },
   { href: '/wishlist', label: 'Wishlist' },
   { href: '/add', label: 'Add Item' },
+  { href: '/scan', label: 'Scan' },
   { href: '/calculator', label: 'Calculator' },
   { href: '/discovery', label: 'Discovery' },
+  { href: '/analytics', label: 'Analytics' },
+  { href: '/calendar', label: 'Calendar' },
   { href: '/settings', label: 'Settings' },
 ]
 
@@ -27,7 +30,7 @@ export default function Navigation() {
             <span className="sm:hidden">JP Intel</span>
           </Link>
 
-          <div className="hidden md:flex items-center gap-1">
+          <div className="hidden md:flex items-center gap-1 flex-wrap justify-end">
             {NAV_LINKS.map(link => (
               <Link
                 key={link.href}

@@ -15,6 +15,7 @@ export interface WishlistItem {
   notes?: string
   createdAt: Date
   updatedAt: Date
+  releaseDate?: Date
   condition?: 'new' | 'like_new' | 'good' | 'fair' | 'poor'
   seller?: string
   listingId?: string

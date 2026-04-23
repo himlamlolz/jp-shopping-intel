@@ -2,25 +2,44 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { ShoppingBag, Eye, DollarSign, Inbox, TrendingUp, Plus, ExternalLink } from 'lucide-react'
-import { getWishlist, getDiscoveryItems } from '@/lib/storage'
+import { getWishlist, getDiscoveryItems, getProfile } from '@/lib/storage'
 import type { WishlistItem } from '@/lib/types'
 
 export default function DashboardPage() {
   const [items, setItems] = useState<WishlistItem[]>([])
   const [inboxCount, setInboxCount] = useState(0)
+  const [exchangeRates, setExchangeRates] = useState<Record<string, number> | null>(null)
+  const [preferredCurrency, setPreferredCurrency] = useState('JPY')
 
   useEffect(() => {
     setItems(getWishlist())
     setInboxCount(getDiscoveryItems().filter(i => i.status === 'inbox').length)
+    const profile = getProfile()
+    setPreferredCurrency(profile.preferredCurrency)
+    fetch('/api/exchange-rate')
+      .then(r => r.json())
+      .then((data: { rates?: Record<string, number> }) => {
+        if (data.rates) setExchangeRates(data.rates)
+      })
+      .catch(() => {})
   }, [])
 
   const totalValue = items.reduce((sum, i) => sum + i.price, 0)
   const watchingCount = items.filter(i => i.status === 'watching').length
 
+  const totalValueDisplay = (() => {
+    const jpy = `¥${totalValue.toLocaleString()}`
+    if (!exchangeRates || preferredCurrency === 'JPY') return jpy
+    const rate = exchangeRates[preferredCurrency]
+    if (!rate) return jpy
+    const converted = Math.round(totalValue * rate).toLocaleString()
+    return `${jpy} / ${preferredCurrency} ${converted}`
+  })()
+
   const stats = [
     { label: 'Total Items', value: items.length, icon: ShoppingBag, colorBg: 'bg-indigo-50 dark:bg-indigo-900/30', colorText: 'text-indigo-600 dark:text-indigo-400' },
     { label: 'Watching', value: watchingCount, icon: Eye, colorBg: 'bg-amber-50 dark:bg-amber-900/30', colorText: 'text-amber-600 dark:text-amber-400' },
-    { label: 'Total Value (JPY)', value: `¥${totalValue.toLocaleString()}`, icon: DollarSign, colorBg: 'bg-emerald-50 dark:bg-emerald-900/30', colorText: 'text-emerald-600 dark:text-emerald-400' },
+    { label: 'Total Value (JPY)', value: totalValueDisplay, icon: DollarSign, colorBg: 'bg-emerald-50 dark:bg-emerald-900/30', colorText: 'text-emerald-600 dark:text-emerald-400' },
     { label: 'Discovery Inbox', value: inboxCount, icon: Inbox, colorBg: 'bg-purple-50 dark:bg-purple-900/30', colorText: 'text-purple-600 dark:text-purple-400' },
   ]
 
@@ -40,7 +59,7 @@ export default function DashboardPage() {
             <div className={`inline-flex p-2 rounded-lg ${stat.colorBg} mb-2`}>
               <stat.icon className={`w-5 h-5 ${stat.colorText}`} />
             </div>
-            <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stat.value}</p>
+            <p className="text-2xl font-bold text-gray-900 dark:text-gray-100 break-words">{stat.value}</p>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{stat.label}</p>
           </div>
         ))}
@@ -91,11 +110,14 @@ export default function DashboardPage() {
         )}
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4">
         {[
           { href: '/add', icon: '➕', label: 'Add Item' },
+          { href: '/scan', icon: '📷', label: 'Scan' },
           { href: '/calculator', icon: '🧮', label: 'Calculator' },
           { href: '/discovery', icon: '🔍', label: 'Discovery' },
+          { href: '/analytics', icon: '📊', label: 'Analytics' },
+          { href: '/calendar', icon: '📅', label: 'Calendar' },
           { href: '/settings', icon: '⚙️', label: 'Settings' },
         ].map(action => (
           <Link key={action.href} href={action.href} className="flex flex-col items-center gap-2 p-4 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm hover:border-indigo-300 dark:hover:border-indigo-700 hover:shadow-md transition-all text-center">
