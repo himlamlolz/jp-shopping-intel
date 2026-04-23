@@ -1,7 +1,7 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Settings, Plus, X, Check, AlertCircle } from 'lucide-react'
-import { getProfile, saveProfile, getVisionApiKey, setVisionApiKey } from '@/lib/storage'
+import { getProfile, saveProfile, getVisionApiKey, setVisionApiKey, getWishlist, saveWishlist, getDiscoveryItems, saveDiscoveryItems } from '@/lib/storage'
 import { PROXY_SERVICE_PRESETS, type InterestProfile, type KeywordPair } from '@/lib/types'
 
 const CURRENCIES = ['USD','HKD','TWD','SGD','EUR','GBP','AUD','CAD','KRW','CNY']
@@ -14,6 +14,8 @@ export default function SettingsPage() {
   const [newEnKw, setNewEnKw] = useState('')
   const [newJaKw, setNewJaKw] = useState('')
   const [selectedPreset, setSelectedPreset] = useState('Buyee')
+  const [importStatus, setImportStatus] = useState<'idle'|'ok'|'fail'>('idle')
+  const importRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     setProfile(getProfile())
@@ -55,6 +57,46 @@ export default function SettingsPage() {
       })
       setKeyStatus(res.ok ? 'ok' : 'fail')
     } catch { setKeyStatus('fail') }
+  }
+
+  const handleExport = () => {
+    const data = {
+      wishlist: getWishlist(),
+      profile: getProfile(),
+      discoveryItems: getDiscoveryItems(),
+      exportedAt: new Date().toISOString(),
+    }
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `jp-shopping-intel-backup-${new Date().toISOString().slice(0,10)}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result as string) as {
+          wishlist?: unknown[]; profile?: InterestProfile; discoveryItems?: unknown[]
+        }
+        if (data.wishlist) saveWishlist(data.wishlist as Parameters<typeof saveWishlist>[0])
+        if (data.profile) { saveProfile(data.profile); setProfile(data.profile) }
+        if (data.discoveryItems) saveDiscoveryItems(data.discoveryItems as Parameters<typeof saveDiscoveryItems>[0])
+        setImportStatus('ok')
+        setTimeout(() => setImportStatus('idle'), 3000)
+      } catch {
+        setImportStatus('fail')
+        setTimeout(() => setImportStatus('idle'), 3000)
+      }
+    }
+    reader.readAsText(file)
+    // reset so same file can be re-imported
+    e.target.value = ''
   }
 
   // Live preview of Twitter search URLs
@@ -154,6 +196,32 @@ export default function SettingsPage() {
         <button onClick={handleSave} className={`w-full py-3 rounded-xl font-semibold transition-colors ${saved ? 'bg-green-600 text-white' : 'bg-indigo-600 hover:bg-indigo-700 text-white'}`}>
           {saved ? '✓ Saved' : 'Save Settings'}
         </button>
+
+        {/* Data Management */}
+        <section className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6">
+          <h2 className="font-semibold text-gray-900 dark:text-gray-100 mb-4">Data Management</h2>
+
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Export all wishlist, profile, and discovery data as a JSON file.</p>
+              <button onClick={handleExport}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium transition-colors">
+                Export Backup JSON
+              </button>
+            </div>
+
+            <div className="border-t border-gray-100 dark:border-gray-800 pt-4">
+              <p className="text-sm text-amber-600 dark:text-amber-400 mb-2">⚠️ Import will overwrite your current data.</p>
+              <input ref={importRef} type="file" accept=".json" className="hidden" onChange={handleImport} />
+              <button onClick={() => importRef.current?.click()}
+                className="px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 text-sm font-medium transition-colors">
+                Import from JSON
+              </button>
+              {importStatus === 'ok' && <p className="text-xs text-green-600 mt-1 flex items-center gap-1"><Check className="w-3 h-3" /> Data imported successfully</p>}
+              {importStatus === 'fail' && <p className="text-xs text-red-600 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> Import failed — invalid file</p>}
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   )

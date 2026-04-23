@@ -64,3 +64,44 @@ export function imageFileToBase64(file: File): Promise<string> {
     reader.readAsDataURL(file)
   })
 }
+
+export async function preprocessImageForOcr(file: File): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      const MIN_WIDTH = 1200
+      let { width, height } = img
+      if (width < MIN_WIDTH) {
+        const scale = MIN_WIDTH / width
+        width = MIN_WIDTH
+        height = Math.round(height * scale)
+      }
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')
+      if (!ctx) { reject(new Error('No canvas context')); return }
+      ctx.drawImage(img, 0, 0, width, height)
+      const imageData = ctx.getImageData(0, 0, width, height)
+      const d = imageData.data
+      for (let i = 0; i < d.length; i += 4) {
+        // Contrast boost
+        const r = Math.min(255, Math.max(0, (d[i]   - 128) * 1.5 + 128))
+        const g = Math.min(255, Math.max(0, (d[i+1] - 128) * 1.5 + 128))
+        const b = Math.min(255, Math.max(0, (d[i+2] - 128) * 1.5 + 128))
+        // Grayscale
+        const gray = 0.299 * r + 0.587 * g + 0.114 * b
+        d[i] = d[i+1] = d[i+2] = gray
+      }
+      ctx.putImageData(imageData, 0, 0)
+      canvas.toBlob(blob => {
+        if (blob) resolve(blob)
+        else reject(new Error('canvas.toBlob failed'))
+      }, 'image/png')
+    }
+    img.onerror = reject
+    img.src = url
+  })
+}

@@ -1,7 +1,7 @@
 'use client'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import { Link2, Image as ImageIcon, Camera, PenLine, Check, Loader2 } from 'lucide-react'
+import { Link2, Image as ImageIcon, Camera, PenLine, Check, Loader2, X } from 'lucide-react'
 import { addWishlistItem, addDiscoveryItem, getProfile, getVisionApiKey } from '@/lib/storage'
 import { detectPlatform, generateJanSearchLinks, type WishlistItem, type DiscoveryItem } from '@/lib/types'
 import { extractFromOcrText, imageFileToBase64 } from '@/lib/ocr-utils'
@@ -11,6 +11,13 @@ type CameraPhase = 'capture' | 'processing' | 'results'
 
 const STATUSES: WishlistItem['status'][] = ['watching', 'bid_placed', 'purchased', 'arrived', 'passed']
 const PRIORITIES: WishlistItem['priority'][] = ['low', 'medium', 'high']
+const CONDITIONS: Array<{ value: NonNullable<WishlistItem['condition']>; label: string }> = [
+  { value: 'new', label: 'New' },
+  { value: 'like_new', label: 'Like New' },
+  { value: 'good', label: 'Good' },
+  { value: 'fair', label: 'Fair' },
+  { value: 'poor', label: 'Poor' },
+]
 
 const defaultForm = (): Partial<WishlistItem> => ({
   title: '', titleJa: '', price: 0, currency: 'JPY',
@@ -20,6 +27,7 @@ const defaultForm = (): Partial<WishlistItem> => ({
 export default function AddPage() {
   const [mode, setMode] = useState<Mode>('manual')
   const [form, setForm] = useState<Partial<WishlistItem>>(defaultForm())
+  const [chipInput, setChipInput] = useState('')
   const [url, setUrl] = useState('')
   const [saved, setSaved] = useState(false)
 
@@ -32,9 +40,27 @@ export default function AddPage() {
   // Camera state
   const [cameraPhase, setCameraPhase] = useState<CameraPhase>('capture')
   const [cameraFile, setCameraFile] = useState<File | null>(null)
+  const [cameraPhotoDataUrl, setCameraPhotoDataUrl] = useState<string | null>(null)
   const [janCode, setJanCode] = useState<string | null>(null)
   const [janLinks, setJanLinks] = useState<Record<string, string> | null>(null)
   const [cameraOcr, setCameraOcr] = useState<ReturnType<typeof extractFromOcrText> | null>(null)
+
+  // Vision API nudge banner
+  const [nudgeDismissed, setNudgeDismissed] = useState(false)
+
+  // Chip helpers
+  const parseTagInput = (raw: string): string[] =>
+    raw.split(',').map(t => t.trim()).filter(Boolean)
+
+  const commitChip = (raw: string) => {
+    const tags = parseTagInput(raw)
+    if (!tags.length) return
+    setForm(f => ({ ...f, tags: [...new Set([...(f.tags ?? []), ...tags])] }))
+    setChipInput('')
+  }
+  const removeChip = (tag: string) => {
+    setForm(f => ({ ...f, tags: (f.tags ?? []).filter(t => t !== tag) }))
+  }
 
   // URL mode
   const handleUrlPaste = () => {
@@ -48,6 +74,14 @@ export default function AddPage() {
     setOcrFile(file)
     setOcrLoading(true)
     try {
+      // Store screenshot as data URL
+      const dataUrl = await new Promise<string>((resolve) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result as string)
+        reader.readAsDataURL(file)
+      })
+      setForm(f => ({ ...f, screenshotUrl: dataUrl }))
+
       // Try server-side Vision API first if key is present
       const visionKey = getVisionApiKey()
       if (visionKey) {
@@ -67,10 +101,12 @@ export default function AddPage() {
           return
         }
       }
-      // Fall back to Tesseract.js
+      // Fall back to Tesseract.js with preprocessing
       const { createWorker } = await import('tesseract.js')
+      const { preprocessImageForOcr } = await import('@/lib/ocr-utils')
+      const processedBlob = await preprocessImageForOcr(file)
       const worker = await createWorker(['jpn', 'eng'])
-      const { data } = await worker.recognize(file)
+      const { data } = await worker.recognize(processedBlob)
       await worker.terminate()
       const profile = getProfile()
       const allKw = profile.keywords.flatMap(k => [k.en, k.ja]).filter(Boolean) as string[]
@@ -111,6 +147,15 @@ export default function AddPage() {
   const processCamera = async (file: File) => {
     setCameraFile(file)
     setCameraPhase('processing')
+
+    // Store camera photo as data URL
+    const photoDataUrl = await new Promise<string>((resolve) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result as string)
+      reader.readAsDataURL(file)
+    })
+    setCameraPhotoDataUrl(photoDataUrl)
+
     const profile = getProfile()
     const allKw = profile.keywords.flatMap(k => [k.en, k.ja]).filter(Boolean) as string[]
 
@@ -150,8 +195,10 @@ export default function AddPage() {
         }
       }
       const { createWorker } = await import('tesseract.js')
+      const { preprocessImageForOcr } = await import('@/lib/ocr-utils')
+      const processedBlob = await preprocessImageForOcr(file)
       const worker = await createWorker(['jpn', 'eng'])
-      const { data } = await worker.recognize(file)
+      const { data } = await worker.recognize(processedBlob)
       await worker.terminate()
       const extracted = extractFromOcrText(data.text, allKw)
       if (!detectedJan && extracted.janCode) {
@@ -175,12 +222,14 @@ export default function AddPage() {
       priority: 'medium',
       tags: cameraOcr?.seriesName ? [cameraOcr.seriesName] : [],
       listingId: janCode ?? undefined,
+      screenshotUrl: cameraPhotoDataUrl ?? undefined,
       createdAt: new Date(),
       updatedAt: new Date(),
       realWorldCapture: {
         janCode: janCode ?? undefined,
         ocrRawText: cameraOcr?.title,
         capturedAt: new Date(),
+        photoUrl: cameraPhotoDataUrl ?? undefined,
       },
     }
     addWishlistItem(item)
@@ -208,11 +257,25 @@ export default function AddPage() {
   }
 
   const resetAll = () => {
-    setForm(defaultForm()); setUrl(''); setOcrFile(null); setCameraFile(null)
-    setJanCode(null); setJanLinks(null); setCameraOcr(null); setCameraPhase('capture')
+    setForm(defaultForm())
+    setChipInput('')
+    setUrl('')
+    setOcrFile(null)
+    setCameraFile(null)
+    setCameraPhotoDataUrl(null)
+    setJanCode(null)
+    setJanLinks(null)
+    setCameraOcr(null)
+    setCameraPhase('capture')
+    setNudgeDismissed(false)
   }
 
   const handleSubmit = () => {
+    // Commit any in-progress chip text
+    const finalTags = chipInput.trim()
+      ? [...new Set([...(form.tags ?? []), ...parseTagInput(chipInput)])]
+      : (form.tags ?? [])
+
     const item: WishlistItem = {
       ...(form as WishlistItem),
       id: uuidv4(),
@@ -222,7 +285,7 @@ export default function AddPage() {
       sourcePlatform: form.sourcePlatform ?? 'other',
       status: form.status ?? 'watching',
       priority: form.priority ?? 'medium',
-      tags: form.tags ?? [],
+      tags: finalTags,
       createdAt: new Date(),
       updatedAt: new Date(),
     }
@@ -244,6 +307,12 @@ export default function AddPage() {
     return <span className={`text-xs px-1.5 py-0.5 rounded ml-1 ${c === 'high' ? 'bg-green-100 text-green-700' : c === 'medium' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>{c}</span>
   }
 
+  // Vision API nudge: show when OCR file exists, no key configured, and confidence is low
+  const showNudge = !nudgeDismissed &&
+    (ocrFile !== null || cameraFile !== null) &&
+    !getVisionApiKey() &&
+    Object.values(ocrConfidence).some(c => c === 'low')
+
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">Add Item</h1>
@@ -257,6 +326,19 @@ export default function AddPage() {
           </button>
         ))}
       </div>
+
+      {/* Vision API nudge banner */}
+      {showNudge && (
+        <div className="mb-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 flex items-center justify-between text-sm text-amber-800 dark:text-amber-200">
+          <span>⚠️ OCR accuracy is limited without a Vision API key.</span>
+          <div className="flex items-center gap-2 ml-3 shrink-0">
+            <a href="/settings" className="underline hover:no-underline whitespace-nowrap">Add key in Settings →</a>
+            <button onClick={() => setNudgeDismissed(true)} className="hover:opacity-70">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* URL mode */}
       {mode === 'url' && (
@@ -399,7 +481,13 @@ export default function AddPage() {
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Price Ceiling (JPY)</label>
+            <input type="number" value={form.priceCeiling ?? ''} onChange={e => setForm(f => ({...f, priceCeiling: parseInt(e.target.value)||undefined}))}
+              placeholder="Optional budget ceiling"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm" />
+          </div>
+          <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
               <select value={form.status} onChange={e => setForm(f => ({...f, status: e.target.value as WishlistItem['status']}))}
@@ -414,13 +502,44 @@ export default function AddPage() {
                 {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Condition</label>
+              <select value={form.condition ?? ''} onChange={e => setForm(f => ({...f, condition: (e.target.value||undefined) as WishlistItem['condition']}))}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm">
+                <option value="">— none —</option>
+                {CONDITIONS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+              </select>
+            </div>
           </div>
+
+          {/* Tags chip input */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tags (comma-separated)</label>
-            <input value={(form.tags ?? []).join(', ')} onChange={e => setForm(f => ({...f, tags: e.target.value.split(',').map(t => t.trim()).filter(Boolean)}))}
-              placeholder="kantai_collection, figures"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm" />
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tags</label>
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {(form.tags ?? []).map(tag => (
+                <span key={tag} className="inline-flex items-center gap-1 text-xs bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 px-2 py-0.5 rounded-full">
+                  {tag}
+                  <button type="button" onClick={() => removeChip(tag)} className="hover:text-indigo-900 dark:hover:text-indigo-100">
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+            <input
+              value={chipInput}
+              onChange={e => setChipInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' || e.key === ',') {
+                  e.preventDefault()
+                  commitChip(chipInput)
+                }
+              }}
+              onBlur={() => { if (chipInput.trim()) commitChip(chipInput) }}
+              placeholder="Add tag…"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm"
+            />
           </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Notes</label>
             <textarea value={form.notes ?? ''} onChange={e => setForm(f => ({...f, notes: e.target.value}))} rows={2}

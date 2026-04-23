@@ -21,6 +21,7 @@ export default function WishlistPage() {
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [filterPlatform, setFilterPlatform] = useState<string>('all')
+  const [filterTag, setFilterTag] = useState<string>('')
   const [sortBy, setSortBy] = useState<string>('date')
 
   useEffect(() => {
@@ -41,9 +42,12 @@ export default function WishlistPage() {
     }
   }
 
+  const allTags = [...new Set(items.flatMap(i => i.tags))]
+
   const filtered = items
     .filter(i => filterStatus === 'all' || i.status === filterStatus)
     .filter(i => filterPlatform === 'all' || i.sourcePlatform === filterPlatform)
+    .filter(i => filterTag === '' || i.tags.includes(filterTag))
     .filter(i => search === '' || i.title.toLowerCase().includes(search.toLowerCase()) || (i.titleJa ?? '').includes(search))
     .sort((a, b) => {
       if (sortBy === 'price_asc') return a.price - b.price
@@ -64,7 +68,7 @@ export default function WishlistPage() {
         </Link>
       </div>
 
-      <div className="flex flex-wrap gap-3 mb-6">
+      <div className="flex flex-wrap gap-3 mb-4">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
@@ -93,60 +97,107 @@ export default function WishlistPage() {
         </select>
       </div>
 
+      {allTags.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto pb-2 mb-4">
+          <button
+            onClick={() => setFilterTag('')}
+            className={`shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors ${filterTag === '' ? 'bg-indigo-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'}`}>
+            All Tags
+          </button>
+          {allTags.map(tag => (
+            <button key={tag}
+              onClick={() => setFilterTag(filterTag === tag ? '' : tag)}
+              className={`shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors ${filterTag === tag ? 'bg-indigo-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'}`}>
+              {tag}
+            </button>
+          ))}
+        </div>
+      )}
+
       {filtered.length === 0 ? (
         <div className="text-center py-16 text-gray-400">No items found.</div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {filtered.map(item => (
-            <div key={item.id} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5 shadow-sm hover:shadow-md transition-shadow">
-              <div className="flex items-start justify-between gap-2 mb-3">
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-900 dark:text-gray-100 truncate">{item.title}</p>
-                  {item.titleJa && <p className="text-sm text-gray-500 truncate">{item.titleJa}</p>}
-                </div>
-                <div className="flex gap-1 shrink-0">
-                  {item.sourceUrl && (
-                    <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer" className="p-1.5 text-gray-400 hover:text-indigo-600 rounded">
-                      <ExternalLink className="w-4 h-4" />
-                    </a>
-                  )}
-                  <button onClick={() => handleDelete(item.id)} className="p-1.5 text-gray-400 hover:text-red-500 rounded">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
+            <Link key={item.id} href={`/wishlist/${item.id}`}
+              className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm hover:shadow-md transition-shadow block overflow-hidden">
 
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xl font-bold text-gray-900 dark:text-gray-100">¥{item.price.toLocaleString()}</span>
-                <span className={`text-xs px-2 py-1 rounded-full font-medium ${item.priority === 'high' ? 'bg-red-100 text-red-700' : item.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-600'}`}>
-                  {item.priority}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">
-                  {item.sourcePlatform.replace('_',' ')}
-                </span>
-                <select
-                  value={item.status}
-                  onChange={e => handleStatusChange(item.id, e.target.value as WishlistItem['status'])}
-                  className={`text-xs font-medium px-2 py-1 rounded-full cursor-pointer ${STATUS_COLORS[item.status]}`}
-                >
-                  {STATUSES.map(s => <option key={s} value={s}>{s.replace('_',' ')}</option>)}
-                </select>
-              </div>
-
-              {item.tags.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-3">
-                  {item.tags.map(tag => (
-                    <span key={tag} className="text-xs bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 px-2 py-0.5 rounded-full">{tag}</span>
-                  ))}
+              {(item.screenshotUrl || item.realWorldCapture?.photoUrl) && (
+                <div className="mb-3 -mx-0 rounded-t-xl overflow-hidden h-36 bg-gray-100 dark:bg-gray-800">
+                  <img
+                    src={item.screenshotUrl ?? item.realWorldCapture?.photoUrl}
+                    alt={item.title}
+                    className="w-full h-full object-cover"
+                  />
                 </div>
               )}
-            </div>
+
+              <div className="p-5">
+                <div className="flex items-start justify-between gap-2 mb-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-gray-900 dark:text-gray-100 truncate">{item.title}</p>
+                    {item.titleJa && <p className="text-sm text-gray-500 truncate">{item.titleJa}</p>}
+                  </div>
+                  <div className="flex gap-1 shrink-0">
+                    {item.sourceUrl && (
+                      <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer"
+                        onClick={e => e.stopPropagation()}
+                        className="p-1.5 text-gray-400 hover:text-indigo-600 rounded">
+                        <ExternalLink className="w-4 h-4" />
+                      </a>
+                    )}
+                    <button onClick={e => { e.preventDefault(); e.stopPropagation(); handleDelete(item.id) }} className="p-1.5 text-gray-400 hover:text-red-500 rounded">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between mb-3">
+                  <span className="flex items-center gap-1.5 text-xl font-bold text-gray-900 dark:text-gray-100">
+                    ¥{item.price.toLocaleString()}
+                    {item.priceCeiling && item.price <= item.priceCeiling && (
+                      <span title="Within your price ceiling!" className="text-amber-500 text-sm">🔔</span>
+                    )}
+                  </span>
+                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${item.priority === 'high' ? 'bg-red-100 text-red-700' : item.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-600'}`}>
+                    {item.priority}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">
+                      {item.sourcePlatform.replace('_',' ')}
+                    </span>
+                    {item.condition && (
+                      <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded">
+                        {item.condition.replace('_', ' ')}
+                      </span>
+                    )}
+                  </div>
+                  <select
+                    value={item.status}
+                    onChange={e => { e.stopPropagation(); handleStatusChange(item.id, e.target.value as WishlistItem['status']) }}
+                    onClick={e => e.stopPropagation()}
+                    className={`text-xs font-medium px-2 py-1 rounded-full cursor-pointer ${STATUS_COLORS[item.status]}`}
+                  >
+                    {STATUSES.map(s => <option key={s} value={s}>{s.replace('_',' ')}</option>)}
+                  </select>
+                </div>
+
+                {item.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-3">
+                    {item.tags.map(tag => (
+                      <span key={tag} className="text-xs bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 px-2 py-0.5 rounded-full">{tag}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </Link>
           ))}
         </div>
       )}
     </div>
   )
 }
+

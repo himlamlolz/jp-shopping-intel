@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
-import { ShoppingBag, Eye, DollarSign, Inbox, TrendingUp, Plus } from 'lucide-react'
+import { ShoppingBag, Eye, DollarSign, Inbox, TrendingUp, Plus, ExternalLink } from 'lucide-react'
 import { getWishlist, getDiscoveryItems } from '@/lib/storage'
 import type { WishlistItem } from '@/lib/types'
 
@@ -62,9 +62,19 @@ export default function DashboardPage() {
         ) : (
           <div className="divide-y divide-gray-100 dark:divide-gray-800">
             {items.slice(0, 5).map(item => (
-              <div key={item.id} className="px-6 py-4 flex items-center justify-between">
+              <Link key={item.id} href={`/wishlist/${item.id}`}
+                className="px-6 py-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors rounded-lg">
                 <div>
-                  <p className="font-medium text-gray-900 dark:text-gray-100">{item.title}</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-1.5">
+                    {item.title}
+                    {item.sourceUrl && (
+                      <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer"
+                        onClick={e => e.stopPropagation()}
+                        className="text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400">
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    )}
+                  </p>
                   {item.titleJa && <p className="text-sm text-gray-500">{item.titleJa}</p>}
                 </div>
                 <div className="text-right">
@@ -75,7 +85,7 @@ export default function DashboardPage() {
                     'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
                   }`}>{item.status.replace('_',' ')}</span>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         )}
