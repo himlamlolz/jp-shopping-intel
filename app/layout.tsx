@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import Navigation from "@/components/Navigation";
+import ClientWidgets from "@/components/ClientWidgets";
 
 export const metadata: Metadata = {
   title: "JP Shopping Intel",
@@ -23,6 +24,7 @@ export default function RootLayout({
         <main className="min-h-[calc(100vh-4rem)]">
           {children}
         </main>
+        <ClientWidgets />
       </body>
     </html>
   );
