@@ -60,6 +60,7 @@ export function extractFromOcrText(text: string, keywords?: string[]): OcrExtrac
   const title = candidateLines
     .filter(l => l.length > 5) // ignore short UI labels
     .sort((a, b) => b.length - a.length)[0]
+    ?? japaneseLines.filter(l => l.length > 5).sort((a, b) => b.length - a.length)[0]
     ?? japaneseLines[0]
     ?? lines[0]
 
