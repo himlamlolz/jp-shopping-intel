@@ -172,6 +172,14 @@ export function setVisionApiKey(key: string): void {
   setItem('jp-shopping-intel:vision-api-key', key)
 }
 
+export function getGeminiApiKey(): string {
+  return getItem<string>('jp-shopping-intel:gemini-api-key', '')
+}
+
+export function setGeminiApiKey(key: string): void {
+  setItem('jp-shopping-intel:gemini-api-key', key)
+}
+
 // ── Export helpers ────────────────────────────────────────────────────────────
 
 export function exportWishlistJson(): string {

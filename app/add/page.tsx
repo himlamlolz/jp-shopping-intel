@@ -2,9 +2,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { Link2, Image as ImageIcon, Camera, PenLine, Check, Loader2, X } from 'lucide-react'
-import { addWishlistItem, addDiscoveryItem, getProfile, getVisionApiKey } from '@/lib/storage'
+import { addWishlistItem, addDiscoveryItem, getProfile, getVisionApiKey, getGeminiApiKey } from '@/lib/storage'
 import { detectPlatform, generateJanSearchLinks, type WishlistItem, type DiscoveryItem } from '@/lib/types'
 import { extractFromOcrText, imageFileToBase64 } from '@/lib/ocr-utils'
+import { extractWithGemini, type GeminiExtraction } from '@/lib/gemini-utils'
 
 type Mode = 'url' | 'screenshot' | 'camera' | 'manual'
 type CameraPhase = 'capture' | 'processing' | 'results'
@@ -82,7 +83,19 @@ export default function AddPage() {
       })
       setForm(f => ({ ...f, screenshotUrl: dataUrl }))
 
-      // Try server-side Vision API first if key is present
+      // Try Gemini first if key is present
+      const geminiKey = getGeminiApiKey()
+      if (geminiKey) {
+        const b64 = await imageFileToBase64(file)
+        try {
+          const result = await extractWithGemini(b64, geminiKey)
+          applyGeminiExtraction(result)
+          setOcrLoading(false)
+          return
+        } catch { /* fall through to Vision API */ }
+      }
+
+      // Try server-side Vision API if key is present
       const visionKey = getVisionApiKey()
       if (visionKey) {
         const b64 = await imageFileToBase64(file)
@@ -125,6 +138,20 @@ export default function AddPage() {
       listingId: extracted.listingId ?? f.listingId,
     }))
     setOcrConfidence(Object.fromEntries(Object.entries(extracted.confidence).map(([k,v]) => [k, v as string])))
+  }
+
+  const applyGeminiExtraction = (result: GeminiExtraction) => {
+    setForm(f => ({
+      ...f,
+      ...(result.title ? { title: result.title } : {}),
+      ...(result.price ? { price: result.price } : {}),
+      ...(result.sourcePlatform ? { sourcePlatform: result.sourcePlatform as WishlistItem['sourcePlatform'] } : {}),
+      ...(result.condition ? { condition: result.condition as WishlistItem['condition'] } : {}),
+      ...(result.listingId ? { listingId: result.listingId } : {}),
+      ...(result.tags?.length ? { tags: result.tags } : {}),
+      ...(result.notes ? { notes: result.notes } : {}),
+    }))
+    setOcrConfidence({ title: 'high', price: 'high', platform: 'high' })
   }
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -310,6 +337,7 @@ export default function AddPage() {
   // Vision API nudge: show when OCR file exists, no key configured, and confidence is low
   const showNudge = !nudgeDismissed &&
     (ocrFile !== null || cameraFile !== null) &&
+    !getGeminiApiKey() &&
     !getVisionApiKey() &&
     Object.values(ocrConfidence).some(c => c === 'low')
 
@@ -330,7 +358,7 @@ export default function AddPage() {
       {/* Vision API nudge banner */}
       {showNudge && (
         <div className="mb-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 flex items-center justify-between text-sm text-amber-800 dark:text-amber-200">
-          <span>⚠️ OCR accuracy is limited without a Vision API key.</span>
+          <span>⚠️ OCR accuracy is limited without a Vision API or Gemini key.</span>
           <div className="flex items-center gap-2 ml-3 shrink-0">
             <a href="/settings" className="underline hover:no-underline whitespace-nowrap">Add key in Settings →</a>
             <button onClick={() => setNudgeDismissed(true)} className="hover:opacity-70">
