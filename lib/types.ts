@@ -65,6 +65,7 @@ export interface DiscoveryItem {
   id: string
   sourceAccountHandle: string
   sourcePlatform: string
+  sourceId?: string
   screenshotUrl?: string
   photoUrl?: string
   extractedText?: string
