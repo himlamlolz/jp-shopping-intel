@@ -264,7 +264,9 @@ export default function DiscoveryPage() {
     setGscLoading(true)
     setGscError(null)
     try {
-      const res = await fetch('/api/gscrss')
+      const rsshubUrl = getProfile().rsshubUrl
+      const url = rsshubUrl ? `/api/gscrss?rsshub=${encodeURIComponent(rsshubUrl)}` : '/api/gscrss'
+      const res = await fetch(url)
       const data = await res.json() as { items: GscRssItem[]; error?: string }
       if (data.error) {
         setGscError(data.error)

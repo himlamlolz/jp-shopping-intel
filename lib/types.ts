@@ -44,6 +44,7 @@ export interface InterestProfile {
   preferredCurrency: string
   proxyServiceFee: number
   internationalShippingEstimate: number
+  rsshubUrl?: string
 }
 
 export interface SocialAccount {
