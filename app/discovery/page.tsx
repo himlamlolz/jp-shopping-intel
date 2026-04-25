@@ -117,7 +117,7 @@ export default function DiscoveryPage() {
       const allKw = keywords.flatMap(k => [k.en, k.ja]).filter(Boolean) as string[]
 
       // Scan for multiple price occurrences
-      const priceMatches = [...text.matchAll(/[¥￥][\d,]+/g)]
+      const priceMatches = [...text.matchAll(/[¥￥][\d,]*\d/g)]
       if (priceMatches.length > 1) {
         let added = 0
         for (const match of priceMatches) {
@@ -331,7 +331,7 @@ export default function DiscoveryPage() {
               {addAccountOpen && (
                 <div className="mt-3 space-y-2">
                   <div className="grid grid-cols-2 gap-2">
-                    <input placeholder="Handle (e.g. gsc_goodsmile)" value={newAccount.handle}
+                    <input placeholder="Handle without @ (e.g. gsc_goodsmile)" value={newAccount.handle}
                       onChange={e => setNewAccount(a => ({ ...a, handle: e.target.value }))}
                       className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm" />
                     <input placeholder="Display Name" value={newAccount.displayName}

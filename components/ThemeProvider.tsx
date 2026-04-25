@@ -42,14 +42,15 @@ export default function ThemeProvider({ children }: { children: React.ReactNode 
     const stored = getColorScheme()
     setSchemeState(stored)
     applyScheme(stored)
-
-    if (stored === 'system') {
-      const mq = window.matchMedia('(prefers-color-scheme: dark)')
-      const handler = () => applyScheme('system')
-      mq.addEventListener('change', handler)
-      return () => mq.removeEventListener('change', handler)
-    }
   }, [])
+
+  useEffect(() => {
+    if (scheme !== 'system') return
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    const handler = () => applyScheme('system')
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [scheme])
 
   const handleSetScheme = (s: ColorScheme) => {
     setColorScheme(s)
