@@ -34,6 +34,7 @@ export function getWishlist(): WishlistItem[] {
     ...item,
     createdAt: new Date(item.createdAt),
     updatedAt: new Date(item.updatedAt),
+    releaseDate: item.releaseDate ? new Date(item.releaseDate) : undefined,
     priceHistory: item.priceHistory?.map(h => ({ price: h.price, recordedAt: new Date(h.recordedAt) })),
   }))
 }
