@@ -1,7 +1,6 @@
 export interface WishlistItem {
   id: string
   title: string
-  titleJa?: string
   price: number
   priceConverted?: number
   currency: string

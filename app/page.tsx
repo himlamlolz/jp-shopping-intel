@@ -94,7 +94,7 @@ export default function DashboardPage() {
                       </a>
                     )}
                   </p>
-                  {item.titleJa && <p className="text-sm text-gray-500">{item.titleJa}</p>}
+
                 </div>
                 <div className="text-right">
                   <p className="font-semibold text-gray-900 dark:text-gray-100">¥{item.price.toLocaleString()}</p>

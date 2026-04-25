@@ -48,7 +48,7 @@ export default function WishlistPage() {
     .filter(i => filterStatus === 'all' || i.status === filterStatus)
     .filter(i => filterPlatform === 'all' || i.sourcePlatform === filterPlatform)
     .filter(i => filterTag === '' || i.tags.includes(filterTag))
-    .filter(i => search === '' || i.title.toLowerCase().includes(search.toLowerCase()) || (i.titleJa ?? '').includes(search))
+    .filter(i => search === '' || i.title.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => {
       if (sortBy === 'price_asc') return a.price - b.price
       if (sortBy === 'price_desc') return b.price - a.price
@@ -136,7 +136,6 @@ export default function WishlistPage() {
                 <div className="flex items-start justify-between gap-2 mb-3">
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-gray-900 dark:text-gray-100 truncate">{item.title}</p>
-                    {item.titleJa && <p className="text-sm text-gray-500 truncate">{item.titleJa}</p>}
                   </div>
                   <div className="flex gap-1 shrink-0">
                     {item.sourceUrl && (

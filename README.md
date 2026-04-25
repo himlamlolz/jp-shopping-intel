@@ -81,7 +81,10 @@ To use Google Vision: add your API key in **Settings → Google Vision API Key**
 
 - **`DOCUMENT_TEXT_DETECTION`** is always used (strictly better for dense multi-line text than `TEXT_DETECTION`)
 - **Smart landscape crop**: wide screenshots (e.g. Mercari desktop with a product photo on the left) are automatically cropped to the right 55% where the title and price panel lives
-- **Position-aware title extraction**: product titles appear *above* the price on JP shopping pages — the heuristic now prefers Japanese lines that appear before the price line in the document and filters out short UI labels
+- **Position-aware title extraction**: product titles appear *above* the price on JP shopping pages — the heuristic now prefers Japanese lines that appear before the price line in the document
+- **Breadcrumb filtering**: navigation lines containing `＞` / `>` or starting with `ホーム` are excluded from title candidates
+- **UI label filtering**: common Mercari/Yahoo UI labels (`商品の説明`, `カテゴリー`, etc.) are excluded
+- **Split-title joining**: when Vision API wraps a long product title across 2–3 lines, adjacent short Japanese lines are joined with a full-width space to reconstruct the full title
 
 ### Extracted fields
 
@@ -246,7 +249,6 @@ npm run lint
 {
   id: string
   title: string
-  titleJa?: string
   price: number          // JPY
   priceConverted?: number
   currency: string
