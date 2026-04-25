@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { Search, ExternalLink, Inbox, X, Clock, Plus, RefreshCw } from 'lucide-react'
-import { getProfile, getFollowingMap, toggleFollowAccount, getDiscoveryItems, updateDiscoveryItem, addWishlistItem } from '@/lib/storage'
+import { Search, ExternalLink, Inbox, X, Clock, Plus, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react'
+import { getProfile, getFollowingMap, toggleFollowAccount, getDiscoveryItems, updateDiscoveryItem, addWishlistItem, getUserSuggestedAccounts, addUserSuggestedAccount, removeUserSuggestedAccount } from '@/lib/storage'
 import { addDiscoveryItem } from '@/lib/storage'
 import type { FeedItem } from '@/app/api/feed/route'
 import { extractFromOcrText, imageFileToBase64 } from '@/lib/ocr-utils'
@@ -30,14 +30,23 @@ export default function DiscoveryPage() {
   const [showFollowedOnly, setShowFollowedOnly] = useState(false)
   const [inboxItems, setInboxItems] = useState<DiscoveryItem[]>([])
   const [ocrLoading, setOcrLoading] = useState(false)
+  const [ocrMessage, setOcrMessage] = useState<string | null>(null)
   const [keywords, setKeywords] = useState<Array<{ en?: string; ja?: string }>>([])
   const [linksOpen, setLinksOpen] = useState(false)
   const [fetchingFeed, setFetchingFeed] = useState<Record<number, boolean>>({})
+  const [userAccounts, setUserAccounts] = useState<SocialAccount[]>([])
+  const [addAccountOpen, setAddAccountOpen] = useState(false)
+  const [newAccount, setNewAccount] = useState({ handle: '', displayName: '', description: '', categories: [] as string[], platform: 'twitter' as 'twitter' | 'instagram' })
 
   useEffect(() => {
     setFollowing(getFollowingMap())
-    setInboxItems(getDiscoveryItems().filter(i => i.status === 'inbox'))
     setKeywords(getProfile().keywords)
+    setUserAccounts(getUserSuggestedAccounts())
+
+    // Feature 7: Re-surface snoozed items whose snoozedUntil has passed
+    const snoozed = getDiscoveryItems().filter(i => i.status === 'snoozed' && i.snoozedUntil && new Date(i.snoozedUntil) <= new Date())
+    snoozed.forEach(i => updateDiscoveryItem(i.id, { status: 'inbox', snoozedUntil: undefined }))
+    setInboxItems(getDiscoveryItems().filter(i => i.status === 'inbox'))
   }, [])
 
   const handleFollowToggle = (id: string) => {
@@ -47,13 +56,19 @@ export default function DiscoveryPage() {
 
   const profile = { keywords }
 
+  // Merge curated + user accounts
+  const allAccounts = [
+    ...curatedAccounts,
+    ...userAccounts,
+  ]
+
   // Score accounts by keyword overlap
-  const scored = curatedAccounts.map(account => {
+  const scored = allAccounts.map(account => {
     const overlap = profile.keywords.reduce((count, kw) => {
       const term = (kw.ja ?? kw.en ?? '').toLowerCase().replace(/\s/g,'_')
       return count + (account.categories.some(c => c.includes(term) || term.includes(c)) ? 1 : 0)
     }, 0)
-    return { ...account, score: overlap, isFollowing: following[account.id] ?? account.isFollowing }
+    return { ...account, score: overlap, isFollowing: following[account.id] ?? account.isFollowing, isUserAdded: userAccounts.some(u => u.id === account.id) }
   }).sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score
     const tierOrder: Record<string, number> = { major: 0, mid: 1, niche: 2 }
@@ -76,8 +91,10 @@ export default function DiscoveryPage() {
     ])
   ]
 
+  // Feature 3: Multi-item bulk OCR import
   const handleScreenshotDrop = async (file: File) => {
     setOcrLoading(true)
+    setOcrMessage(null)
     try {
       const visionKey = getVisionApiKey()
       let text = ''
@@ -98,20 +115,49 @@ export default function DiscoveryPage() {
         text = data.text
       }
       const allKw = keywords.flatMap(k => [k.en, k.ja]).filter(Boolean) as string[]
-      const extracted = extractFromOcrText(text, allKw)
-      const item: DiscoveryItem = {
-        id: uuidv4(),
-        sourceAccountHandle: 'screenshot',
-        sourcePlatform: 'screenshot',
-        extractedText: text,
-        suggestedTitle: extracted.title,
-        suggestedPrice: extracted.price,
-        suggestedTags: extracted.seriesName ? [extracted.seriesName] : [],
-        status: 'inbox',
-        createdAt: new Date(),
-        autoDismissAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+
+      // Scan for multiple price occurrences
+      const priceMatches = [...text.matchAll(/[¥￥][\d,]+/g)]
+      if (priceMatches.length > 1) {
+        let added = 0
+        for (const match of priceMatches) {
+          const start = Math.max(0, (match.index ?? 0) - 80)
+          const end = Math.min(text.length, (match.index ?? 0) + (match[0].length) + 80)
+          const segment = text.slice(start, end)
+          const extracted = extractFromOcrText(segment, allKw)
+          const item: DiscoveryItem = {
+            id: uuidv4(),
+            sourceAccountHandle: 'screenshot',
+            sourcePlatform: 'screenshot',
+            extractedText: segment,
+            suggestedTitle: extracted.title,
+            suggestedPrice: extracted.price,
+            suggestedTags: extracted.seriesName ? [extracted.seriesName] : [],
+            status: 'inbox',
+            createdAt: new Date(),
+            autoDismissAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          }
+          addDiscoveryItem(item)
+          added++
+        }
+        setOcrMessage(`Found ${added} items from screenshot`)
+      } else {
+        const extracted = extractFromOcrText(text, allKw)
+        const item: DiscoveryItem = {
+          id: uuidv4(),
+          sourceAccountHandle: 'screenshot',
+          sourcePlatform: 'screenshot',
+          extractedText: text,
+          suggestedTitle: extracted.title,
+          suggestedPrice: extracted.price,
+          suggestedTags: extracted.seriesName ? [extracted.seriesName] : [],
+          status: 'inbox',
+          createdAt: new Date(),
+          autoDismissAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        }
+        addDiscoveryItem(item)
+        setOcrMessage('Found 1 item from screenshot')
       }
-      addDiscoveryItem(item)
       setInboxItems(getDiscoveryItems().filter(i => i.status === 'inbox'))
     } finally { setOcrLoading(false) }
   }
@@ -179,6 +225,37 @@ export default function DiscoveryPage() {
     }
   }
 
+  // Feature 10: Add user-suggested account
+  const handleAddAccount = () => {
+    if (!newAccount.handle || !newAccount.displayName) return
+    const handle = newAccount.handle.replace(/^@/, '')
+    const profileUrl = newAccount.platform === 'twitter'
+      ? `https://twitter.com/${handle}`
+      : `https://instagram.com/${handle}`
+    const account: SocialAccount = {
+      id: uuidv4(),
+      handle: `@${handle}`,
+      platform: newAccount.platform,
+      displayName: newAccount.displayName,
+      description: newAccount.description,
+      categories: newAccount.categories,
+      profileUrl,
+      tier: 'niche',
+      isOfficial: false,
+      isFollowing: true,
+      addedAt: new Date(),
+    }
+    addUserSuggestedAccount(account)
+    setUserAccounts(getUserSuggestedAccounts())
+    setNewAccount({ handle: '', displayName: '', description: '', categories: [], platform: 'twitter' })
+    setAddAccountOpen(false)
+  }
+
+  const handleRemoveAccount = (id: string) => {
+    removeUserSuggestedAccount(id)
+    setUserAccounts(getUserSuggestedAccounts())
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">Discovery</h1>
@@ -216,9 +293,10 @@ export default function DiscoveryPage() {
                     <div className="flex items-center gap-2">
                       <a href={account.profileUrl} target="_blank" rel="noopener noreferrer"
                         className="font-semibold text-sm text-gray-900 dark:text-gray-100 hover:text-indigo-600 flex items-center gap-1">
-                        @{account.handle} <ExternalLink className="w-3 h-3" />
+                        {account.handle} <ExternalLink className="w-3 h-3" />
                       </a>
                       {account.isOfficial && <span className="text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 px-1.5 rounded">Official</span>}
+                      {'isUserAdded' in account && account.isUserAdded && <span className="text-xs bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 px-1.5 rounded">Custom</span>}
                     </div>
                     <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{account.description}</p>
                     <div className="flex flex-wrap gap-1 mt-1">
@@ -227,12 +305,63 @@ export default function DiscoveryPage() {
                       ))}
                     </div>
                   </div>
-                  <button onClick={() => handleFollowToggle(account.id)}
-                    className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${following[account.id] ? 'bg-indigo-600 text-white' : 'border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-indigo-400'}`}>
-                    {following[account.id] ? 'Following' : 'Follow'}
-                  </button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button onClick={() => handleFollowToggle(account.id)}
+                      className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${following[account.id] ? 'bg-indigo-600 text-white' : 'border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-indigo-400'}`}>
+                      {following[account.id] ? 'Following' : 'Follow'}
+                    </button>
+                    {'isUserAdded' in account && account.isUserAdded && (
+                      <button onClick={() => handleRemoveAccount(account.id)}
+                        className="p-1 text-gray-400 hover:text-red-500 rounded transition-colors">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
+            </div>
+
+            {/* Feature 10: Add Account form */}
+            <div className="mt-4 border-t border-gray-100 dark:border-gray-800 pt-4">
+              <button onClick={() => setAddAccountOpen(!addAccountOpen)}
+                className="flex items-center gap-2 text-sm text-indigo-600 dark:text-indigo-400 hover:underline">
+                {addAccountOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                Add Account
+              </button>
+              {addAccountOpen && (
+                <div className="mt-3 space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <input placeholder="Handle (e.g. gsc_goodsmile)" value={newAccount.handle}
+                      onChange={e => setNewAccount(a => ({ ...a, handle: e.target.value }))}
+                      className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm" />
+                    <input placeholder="Display Name" value={newAccount.displayName}
+                      onChange={e => setNewAccount(a => ({ ...a, displayName: e.target.value }))}
+                      className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm" />
+                  </div>
+                  <input placeholder="Description" value={newAccount.description}
+                    onChange={e => setNewAccount(a => ({ ...a, description: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm" />
+                  <div className="grid grid-cols-2 gap-2">
+                    <select value={newAccount.platform} onChange={e => setNewAccount(a => ({ ...a, platform: e.target.value as 'twitter' | 'instagram' }))}
+                      className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm">
+                      <option value="twitter">Twitter / X</option>
+                      <option value="instagram">Instagram</option>
+                    </select>
+                    <select multiple value={newAccount.categories}
+                      onChange={e => setNewAccount(a => ({ ...a, categories: Array.from(e.target.selectedOptions, o => o.value) }))}
+                      className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm h-20">
+                      {ALL_CATEGORIES.filter(c => c.id !== 'all').map(c => (
+                        <option key={c.id} value={c.id}>{c.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <button onClick={handleAddAccount}
+                    disabled={!newAccount.handle || !newAccount.displayName}
+                    className="w-full py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+                    Add Account
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -289,6 +418,9 @@ export default function DiscoveryPage() {
               </label>
             )}
           </div>
+          {ocrMessage && (
+            <p className="text-xs text-indigo-600 dark:text-indigo-400 mb-3 text-center">{ocrMessage}</p>
+          )}
 
           {inboxItems.length === 0 ? (
             <p className="text-gray-400 text-sm text-center py-8">Inbox is empty</p>

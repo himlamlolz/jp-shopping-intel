@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
-import { Settings, Plus, X, Check, AlertCircle } from 'lucide-react'
-import { getProfile, saveProfile, getVisionApiKey, setVisionApiKey, getWishlist, saveWishlist, getDiscoveryItems, saveDiscoveryItems, mergeWishlist, mergeProfile, mergeDiscoveryItems } from '@/lib/storage'
+import { Settings, Plus, X, Check, AlertCircle, Download, Upload } from 'lucide-react'
+import { getProfile, saveProfile, getVisionApiKey, setVisionApiKey, getWishlist, saveWishlist, getDiscoveryItems, saveDiscoveryItems, mergeWishlist, mergeProfile, mergeDiscoveryItems, exportWishlistJson, exportWishlistCsv } from '@/lib/storage'
 import { PROXY_SERVICE_PRESETS, type InterestProfile, type WishlistItem, type DiscoveryItem } from '@/lib/types'
 
 const CURRENCIES = ['USD','HKD','TWD','SGD','EUR','GBP','AUD','CAD','KRW','CNY']
@@ -207,15 +207,41 @@ export default function SettingsPage() {
 
         {/* Data Management */}
         <section className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6">
-          <h2 className="font-semibold text-gray-900 dark:text-gray-100 mb-4">Data Management</h2>
+          <h2 className="font-semibold text-gray-900 dark:text-gray-100 mb-4">Data &amp; Backup</h2>
 
           <div className="space-y-4">
             <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Export all wishlist, profile, and discovery data as a JSON file.</p>
-              <button onClick={handleExport}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium transition-colors">
-                Export Backup JSON
-              </button>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Export all data as a full JSON backup.</p>
+              <div className="flex flex-wrap gap-2">
+                <button onClick={handleExport}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium transition-colors">
+                  <Download className="w-4 h-4" /> Export Full Backup JSON
+                </button>
+                <button onClick={() => {
+                  const blob = new Blob([exportWishlistJson()], { type: 'application/json' })
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = `jp-shopping-intel-wishlist-${new Date().toISOString().slice(0,10)}.json`
+                  a.click()
+                  URL.revokeObjectURL(url)
+                }}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 text-sm font-medium transition-colors">
+                  <Download className="w-4 h-4" /> Export Wishlist JSON
+                </button>
+                <button onClick={() => {
+                  const blob = new Blob([exportWishlistCsv()], { type: 'text/csv' })
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = `jp-shopping-intel-wishlist-${new Date().toISOString().slice(0,10)}.csv`
+                  a.click()
+                  URL.revokeObjectURL(url)
+                }}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 text-sm font-medium transition-colors">
+                  <Download className="w-4 h-4" /> Export Wishlist CSV
+                </button>
+              </div>
             </div>
 
             <div className="border-t border-gray-100 dark:border-gray-800 pt-4">
@@ -223,12 +249,12 @@ export default function SettingsPage() {
               <input ref={importRef} type="file" accept=".json" className="hidden" onChange={handleImport} />
               <div className="flex gap-2 flex-wrap">
                 <button onClick={() => { setImportMode('overwrite'); importRef.current?.click() }}
-                  className="px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 text-sm font-medium transition-colors">
-                  Import (Overwrite)
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 text-sm font-medium transition-colors">
+                  <Upload className="w-4 h-4" /> Import (Overwrite)
                 </button>
                 <button onClick={() => { setImportMode('merge'); importRef.current?.click() }}
-                  className="px-4 py-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/50 text-sm font-medium transition-colors">
-                  Import (Merge)
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/50 text-sm font-medium transition-colors">
+                  <Upload className="w-4 h-4" /> Import (Merge)
                 </button>
               </div>
               {importStatus === 'ok' && <p className="text-xs text-green-600 mt-1 flex items-center gap-1"><Check className="w-3 h-3" /> Data imported successfully</p>}

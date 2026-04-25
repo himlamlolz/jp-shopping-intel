@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, ExternalLink, X, Trash2, Check, ChevronDown, ChevronUp } from 'lucide-react'
-import { getWishlist, updateWishlistItem, deleteWishlistItem } from '@/lib/storage'
+import { getWishlist, updateWishlistItem, deleteWishlistItem, getDiscoveryItems } from '@/lib/storage'
 import { generateJanSearchLinks, type WishlistItem } from '@/lib/types'
 
 const STATUSES: WishlistItem['status'][] = ['watching', 'bid_placed', 'purchased', 'arrived', 'passed']
@@ -38,6 +38,45 @@ const PLATFORM_LABELS: Record<string, string> = {
   rakuten: 'Rakuten',
 }
 
+function PriceSparkline({ history }: { history: { price: number; recordedAt: Date }[] }) {
+  if (history.length < 2) return null
+  const W = 200, H = 50
+  const prices = history.map(h => h.price)
+  const min = Math.min(...prices)
+  const max = Math.max(...prices)
+  const range = max - min || 1
+  const pts = history.map((h, i) => {
+    const x = (i / (history.length - 1)) * W
+    const y = H - ((h.price - min) / range) * H
+    return { x, y, price: h.price, date: h.recordedAt }
+  })
+  const polyline = pts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+
+  return (
+    <div>
+      <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Price history</p>
+      <svg width={W} height={H + 4} className="overflow-visible">
+        <polyline
+          points={polyline}
+          fill="none"
+          stroke="#6366f1"
+          strokeWidth="1.5"
+          strokeLinejoin="round"
+        />
+        {pts.map((p, i) => (
+          <circle key={i} cx={p.x} cy={p.y} r="3" fill="#6366f1">
+            <title>{`${new Date(p.date).toLocaleDateString()} — ¥${p.price.toLocaleString()}`}</title>
+          </circle>
+        ))}
+      </svg>
+      <div className="flex justify-between text-xs text-gray-400 mt-1" style={{ width: W }}>
+        <span>¥{min.toLocaleString()}</span>
+        <span>¥{max.toLocaleString()}</span>
+      </div>
+    </div>
+  )
+}
+
 export default function ItemDetailPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
@@ -47,12 +86,23 @@ export default function ItemDetailPage() {
   const [chipInput, setChipInput] = useState('')
   const [saved, setSaved] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [cheaperInInbox, setCheaperInInbox] = useState(false)
 
   useEffect(() => {
     const found = getWishlist().find(i => i.id === id)
     if (found) {
       setItem(found)
       setForm({ ...found })
+      // Feature 6: condition-aware price flag
+      if ((found.condition === 'good' || found.condition === 'fair') && found.tags.length > 0) {
+        const discoveryItems = getDiscoveryItems()
+        const cheaper = discoveryItems.some(d =>
+          d.suggestedPrice !== undefined &&
+          d.suggestedPrice < found.price &&
+          (d.suggestedTags ?? []).some(dt => found.tags.includes(dt))
+        )
+        setCheaperInInbox(cheaper)
+      }
     } else {
       setItem(null)
     }
@@ -143,6 +193,21 @@ export default function ItemDetailPage() {
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 text-sm text-gray-500 cursor-not-allowed" />
           </div>
         </div>
+
+        {/* Price history sparkline (Feature 1) */}
+        {item.priceHistory && item.priceHistory.length >= 2 && (
+          <div className="pt-1">
+            <PriceSparkline history={item.priceHistory} />
+          </div>
+        )}
+
+        {/* Condition-aware price flag (Feature 6) */}
+        {cheaperInInbox && (
+          <div className="flex items-center gap-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg text-sm text-yellow-800 dark:text-yellow-300">
+            ⚠️ Similar items seen for less in your inbox
+          </div>
+        )}
+
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Price Ceiling (JPY)</label>
           <input type="number" value={form.priceCeiling ?? ''} onChange={e => setForm(f => ({ ...f, priceCeiling: parseInt(e.target.value) || undefined }))}
