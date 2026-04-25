@@ -1,9 +1,10 @@
 'use client'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react'
-import { getWishlist } from '@/lib/storage'
+import { ChevronLeft, ChevronRight, CalendarDays, ExternalLink } from 'lucide-react'
+import { getWishlist, getProfile } from '@/lib/storage'
 import type { WishlistItem } from '@/lib/types'
+import type { GscRssItem } from '@/app/api/gscrss/route'
 
 export default function CalendarPage() {
   const [items, setItems] = useState<WishlistItem[]>([])
@@ -11,9 +12,24 @@ export default function CalendarPage() {
     const d = new Date()
     return { year: d.getFullYear(), month: d.getMonth() }
   })
+  const [gscItems, setGscItems] = useState<GscRssItem[]>([])
+  const [gscLoading, setGscLoading] = useState(false)
+  const [gscError, setGscError] = useState<string | null>(null)
+  const [showAllGsc, setShowAllGsc] = useState(false)
 
   useEffect(() => {
     setItems(getWishlist())
+
+    // Feature 2: Fetch GSC releases
+    setGscLoading(true)
+    fetch('/api/gscrss')
+      .then(r => r.json())
+      .then((d: { items: GscRssItem[]; error?: string }) => {
+        if (d.error) setGscError(d.error)
+        setGscItems(d.items ?? [])
+      })
+      .catch(err => setGscError(String(err)))
+      .finally(() => setGscLoading(false))
   }, [])
 
   const { year, month } = current
@@ -74,6 +90,18 @@ export default function CalendarPage() {
   const todayDay = (todayNow.getFullYear() === year && todayNow.getMonth() === month)
     ? todayNow.getDate()
     : -1
+
+  // Feature 2: Match GSC items against user keywords
+  const keywords = getProfile().keywords
+  const matchGsc = (item: GscRssItem) => {
+    const haystack = `${item.title} ${item.description}`.toLowerCase()
+    return keywords.some(kw =>
+      (kw.en && haystack.includes(kw.en.toLowerCase())) ||
+      (kw.ja && haystack.includes(kw.ja.toLowerCase()))
+    )
+  }
+  const matchedGsc = gscItems.filter(matchGsc)
+  const displayGsc = showAllGsc ? gscItems : matchedGsc
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
@@ -154,26 +182,60 @@ export default function CalendarPage() {
           </div>
         </div>
 
-        {/* Upcoming releases sidebar */}
-        <div className="lg:w-64 shrink-0">
-          <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-3 text-sm">Upcoming Releases</h3>
-          {upcoming.length === 0 ? (
-            <p className="text-sm text-gray-400 dark:text-gray-500">No upcoming release dates set.</p>
-          ) : (
-            <div className="space-y-2">
-              {upcoming.map(item => (
-                <Link key={item.id} href={`/wishlist/${item.id}`}
-                  className="block p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors">
-                  <p className="text-xs font-semibold text-purple-800 dark:text-purple-200 mb-0.5">
-                    {new Date(item.releaseDate!).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })}
+        {/* Right sidebar */}
+        <div className="lg:w-64 shrink-0 space-y-6">
+          {/* Upcoming releases */}
+          <div>
+            <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-3 text-sm">Upcoming Releases</h3>
+            {upcoming.length === 0 ? (
+              <p className="text-sm text-gray-400 dark:text-gray-500">No upcoming release dates set.</p>
+            ) : (
+              <div className="space-y-2">
+                {upcoming.map(item => (
+                  <Link key={item.id} href={`/wishlist/${item.id}`}
+                    className="block p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors">
+                    <p className="text-xs font-semibold text-purple-800 dark:text-purple-200 mb-0.5">
+                      {new Date(item.releaseDate!).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </p>
+                    <p className="text-xs text-gray-700 dark:text-gray-300 truncate">{item.title}</p>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Feature 2: GSC Releases */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">GSC Releases</h3>
+              {gscItems.length > 0 && (
+                <button onClick={() => setShowAllGsc(s => !s)}
+                  className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
+                  {showAllGsc ? 'Matched only' : 'Show all'}
+                </button>
+              )}
+            </div>
+            {gscLoading && <p className="text-xs text-gray-400 animate-pulse">Loading GSC releases…</p>}
+            {gscError && <p className="text-xs text-red-500">Failed to load GSC feed</p>}
+            {!gscLoading && !gscError && displayGsc.length === 0 && (
+              <p className="text-xs text-gray-400">No matched releases found.</p>
+            )}
+            <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+              {displayGsc.map((item, i) => (
+                <a key={i} href={item.link} target="_blank" rel="noopener noreferrer"
+                  className="block p-3 bg-rose-50 dark:bg-rose-900/20 rounded-lg border border-rose-200 dark:border-rose-800 hover:bg-rose-100 dark:hover:bg-rose-900/30 transition-colors">
+                  <p className="text-xs font-semibold text-rose-800 dark:text-rose-200 mb-0.5 flex items-center gap-1">
+                    {item.pubDate ? new Date(item.pubDate).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}
+                    <ExternalLink className="w-3 h-3 shrink-0" />
                   </p>
-                  <p className="text-xs text-gray-700 dark:text-gray-300 truncate">{item.title}</p>
-                </Link>
+                  <p className="text-xs text-gray-700 dark:text-gray-300 line-clamp-2">{item.title}</p>
+                </a>
               ))}
             </div>
-          )}
+          </div>
         </div>
       </div>
     </div>
   )
 }
+

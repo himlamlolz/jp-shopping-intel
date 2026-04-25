@@ -20,6 +20,7 @@ export interface WishlistItem {
   seller?: string
   listingId?: string
   realWorldCapture?: RealWorldCapture
+  priceHistory?: { price: number; recordedAt: Date }[]
 }
 
 export interface RealWorldCapture {

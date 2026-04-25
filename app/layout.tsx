@@ -3,6 +3,8 @@ import Script from "next/script";
 import "./globals.css";
 import Navigation from "@/components/Navigation";
 import ClientWidgets from "@/components/ClientWidgets";
+import ThemeProvider from "@/components/ThemeProvider";
+import KeyboardShortcuts from "@/components/KeyboardShortcuts";
 
 export const metadata: Metadata = {
   title: "JP Shopping Intel",
@@ -31,11 +33,14 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full">
       <body className="h-full bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100">
-        <Navigation />
-        <main className="min-h-[calc(100vh-4rem)]">
-          {children}
-        </main>
-        <ClientWidgets />
+        <ThemeProvider>
+          <Navigation />
+          <main className="min-h-[calc(100vh-4rem)]">
+            {children}
+          </main>
+          <ClientWidgets />
+          <KeyboardShortcuts />
+        </ThemeProvider>
         <Script id="sw-register" strategy="afterInteractive">{`
           if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('/sw.js').catch(() => {})

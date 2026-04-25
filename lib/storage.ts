@@ -5,6 +5,8 @@ const PROFILE_KEY = 'jp-shopping-intel:profile'
 const ACCOUNTS_KEY = 'jp-shopping-intel:accounts'
 const DISCOVERY_KEY = 'jp-shopping-intel:discovery'
 const FOLLOWING_KEY = 'jp-shopping-intel:following'
+const USER_ACCOUNTS_KEY = 'jp-shopping-intel:user-accounts'
+const COLOR_SCHEME_KEY = 'jp-shopping-intel:color-scheme'
 
 function isClient(): boolean {
   return typeof window !== 'undefined'
@@ -32,6 +34,7 @@ export function getWishlist(): WishlistItem[] {
     ...item,
     createdAt: new Date(item.createdAt),
     updatedAt: new Date(item.updatedAt),
+    priceHistory: item.priceHistory?.map(h => ({ price: h.price, recordedAt: new Date(h.recordedAt) })),
   }))
 }
 
@@ -40,8 +43,12 @@ export function saveWishlist(items: WishlistItem[]): void {
 }
 
 export function addWishlistItem(item: WishlistItem): void {
+  const itemWithHistory: WishlistItem = {
+    ...item,
+    priceHistory: [{ price: item.price, recordedAt: item.createdAt }],
+  }
   const items = getWishlist()
-  items.unshift(item)
+  items.unshift(itemWithHistory)
   saveWishlist(items)
 }
 
@@ -49,7 +56,12 @@ export function updateWishlistItem(id: string, updates: Partial<WishlistItem>): 
   const items = getWishlist()
   const idx = items.findIndex(i => i.id === id)
   if (idx !== -1) {
-    items[idx] = { ...items[idx], ...updates, updatedAt: new Date() }
+    const current = items[idx]
+    let priceHistory = current.priceHistory ?? [{ price: current.price, recordedAt: current.createdAt }]
+    if (updates.price !== undefined && updates.price !== current.price) {
+      priceHistory = [...priceHistory, { price: updates.price, recordedAt: new Date() }]
+    }
+    items[idx] = { ...current, ...updates, priceHistory, updatedAt: new Date() }
     saveWishlist(items)
   }
 }
@@ -158,3 +170,55 @@ export function getVisionApiKey(): string {
 export function setVisionApiKey(key: string): void {
   setItem('jp-shopping-intel:vision-api-key', key)
 }
+
+// ── Export helpers ────────────────────────────────────────────────────────────
+
+export function exportWishlistJson(): string {
+  return JSON.stringify(getWishlist())
+}
+
+export function exportWishlistCsv(): string {
+  const items = getWishlist()
+  const headers = ['id', 'title', 'price', 'currency', 'status', 'priority', 'tags', 'sourcePlatform', 'createdAt']
+  const rows = items.map(i => [
+    i.id,
+    `"${i.title.replace(/"/g, '""')}"`,
+    i.price,
+    i.currency,
+    i.status,
+    i.priority,
+    `"${i.tags.join(';')}"`,
+    i.sourcePlatform,
+    i.createdAt.toISOString(),
+  ])
+  return [headers.join(','), ...rows.map(r => r.join(','))].join('\n')
+}
+
+// ── Color scheme ──────────────────────────────────────────────────────────────
+
+export function getColorScheme(): 'light' | 'dark' | 'system' {
+  return getItem<'light' | 'dark' | 'system'>(COLOR_SCHEME_KEY, 'system')
+}
+
+export function setColorScheme(scheme: 'light' | 'dark' | 'system'): void {
+  setItem(COLOR_SCHEME_KEY, scheme)
+}
+
+// ── User-suggested accounts ────────────────────────────────────────────────────
+
+export function getUserSuggestedAccounts(): SocialAccount[] {
+  const items = getItem<SocialAccount[]>(USER_ACCOUNTS_KEY, [])
+  return items.map(a => ({ ...a, addedAt: new Date(a.addedAt) }))
+}
+
+export function addUserSuggestedAccount(account: SocialAccount): void {
+  const accounts = getUserSuggestedAccounts()
+  accounts.push(account)
+  setItem(USER_ACCOUNTS_KEY, accounts)
+}
+
+export function removeUserSuggestedAccount(id: string): void {
+  const accounts = getUserSuggestedAccounts().filter(a => a.id !== id)
+  setItem(USER_ACCOUNTS_KEY, accounts)
+}
+

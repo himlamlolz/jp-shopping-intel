@@ -1,8 +1,9 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { ShoppingBag, Menu, X } from 'lucide-react'
+import { ShoppingBag, Menu, X, Sun, Moon, Monitor } from 'lucide-react'
 import { useState } from 'react'
+import { useTheme } from './ThemeProvider'
 
 const NAV_LINKS = [
   { href: '/', label: 'Dashboard' },
@@ -16,9 +17,19 @@ const NAV_LINKS = [
   { href: '/settings', label: 'Settings' },
 ]
 
+const SCHEME_CYCLE = ['light', 'dark', 'system'] as const
+
 export default function Navigation() {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const { scheme, setScheme } = useTheme()
+
+  const cycleTheme = () => {
+    const idx = SCHEME_CYCLE.indexOf(scheme)
+    setScheme(SCHEME_CYCLE[(idx + 1) % SCHEME_CYCLE.length])
+  }
+
+  const ThemeIcon = scheme === 'dark' ? Moon : scheme === 'light' ? Sun : Monitor
 
   return (
     <nav className="bg-indigo-900 dark:bg-indigo-950 shadow-lg sticky top-0 z-50">
@@ -44,14 +55,30 @@ export default function Navigation() {
                 {link.label}
               </Link>
             ))}
+            <button
+              onClick={cycleTheme}
+              title={`Theme: ${scheme}`}
+              className="p-2 rounded-md text-indigo-200 hover:bg-indigo-800 hover:text-white transition-colors"
+            >
+              <ThemeIcon className="w-4 h-4" />
+            </button>
           </div>
 
-          <button
-            className="md:hidden p-2 rounded-md text-indigo-200 hover:text-white hover:bg-indigo-800"
-            onClick={() => setMobileOpen(!mobileOpen)}
-          >
-            {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-          </button>
+          <div className="flex items-center gap-2 md:hidden">
+            <button
+              onClick={cycleTheme}
+              title={`Theme: ${scheme}`}
+              className="p-2 rounded-md text-indigo-200 hover:text-white hover:bg-indigo-800"
+            >
+              <ThemeIcon className="w-4 h-4" />
+            </button>
+            <button
+              className="p-2 rounded-md text-indigo-200 hover:text-white hover:bg-indigo-800"
+              onClick={() => setMobileOpen(!mobileOpen)}
+            >
+              {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            </button>
+          </div>
         </div>
 
         {mobileOpen && (

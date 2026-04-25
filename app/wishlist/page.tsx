@@ -170,8 +170,17 @@ export default function WishlistPage() {
                       {item.sourcePlatform.replace('_',' ')}
                     </span>
                     {item.condition && (
-                      <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded">
-                        {item.condition.replace('_', ' ')}
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded ${
+                        item.condition === 'new' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                        item.condition === 'like_new' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                        item.condition === 'good' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                        item.condition === 'fair' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' :
+                        'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                      }`}>
+                        {item.condition === 'new' ? 'NEW' :
+                         item.condition === 'like_new' ? 'Like New' :
+                         item.condition === 'good' ? 'Good' :
+                         item.condition === 'fair' ? 'Fair' : 'Poor'}
                       </span>
                     )}
                   </div>
