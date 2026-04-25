@@ -20,8 +20,11 @@ export async function POST(req: NextRequest) {
       }
     )
     if (!visionRes.ok) {
-      const err = await visionRes.json() as { error?: { message?: string } }
-      return NextResponse.json({ error: err.error?.message ?? 'Vision API error' }, { status: 502 })
+      const err = await visionRes.json() as { error?: { message?: string; code?: number; status?: string } }
+      return NextResponse.json(
+        { error: err.error?.message ?? 'Vision API error', code: err.error?.code, status: err.error?.status },
+        { status: 502 }
+      )
     }
     const visionData = await visionRes.json() as { responses?: Array<{ fullTextAnnotation?: { text?: string } }> }
     const fullText = visionData.responses?.[0]?.fullTextAnnotation?.text ?? ''
