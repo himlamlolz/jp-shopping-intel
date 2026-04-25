@@ -28,35 +28,61 @@ function parseRssItems(xml: string): GscRssItem[] {
   return items
 }
 
+const GSC_EN_RSS = 'https://www.goodsmile.info/en/rss'
+const GSC_JA_RSS = 'https://www.goodsmile.info/ja/rss'
+
+async function fetchRssItems(url: string): Promise<GscRssItem[] | null> {
+  const res = await fetch(url, {
+    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; jp-shopping-intel/1.0)' },
+    next: { revalidate: 3600 },
+  })
+  if (!res.ok) return null
+  const xml = await res.text()
+  const items = parseRssItems(xml)
+  return items.length > 0 ? items : null
+}
+
 export async function GET(req: NextRequest) {
   const rsshubParam = req.nextUrl.searchParams.get('rsshub')
 
-  let rsshub = 'https://rsshub.app'
   if (rsshubParam) {
+    let parsedRsshub: URL
     try {
-      const parsed = new URL(rsshubParam)
-      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-        return NextResponse.json({ error: 'Invalid rsshub URL.' }, { status: 400 })
-      }
-      rsshub = `${parsed.protocol}//${parsed.host}`
+      parsedRsshub = new URL(rsshubParam)
     } catch {
       return NextResponse.json({ error: 'Invalid rsshub URL.' }, { status: 400 })
     }
+    if (parsedRsshub.protocol !== 'https:' && parsedRsshub.protocol !== 'http:') {
+      return NextResponse.json({ error: 'Invalid rsshub URL.' }, { status: 400 })
+    }
+    const feedUrl = `${parsedRsshub.protocol}//${parsedRsshub.host}/goodsmile/news`
+    try {
+      const res = await fetch(feedUrl, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; jp-shopping-intel/1.0)' },
+        next: { revalidate: 3600 },
+      })
+      if (!res.ok) {
+        return NextResponse.json({ items: [], error: `RSS fetch failed: ${res.status}` })
+      }
+      const xml = await res.text()
+      const items = parseRssItems(xml)
+      return NextResponse.json({ items })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return NextResponse.json({ items: [], error: message })
+    }
   }
 
-  const feedUrl = `${rsshub}/goodsmile/news`
-
   try {
-    const res = await fetch(feedUrl, {
-      headers: { 'User-Agent': 'jp-shopping-intel/1.0' },
-      next: { revalidate: 3600 },
-    })
-    if (!res.ok) {
-      return NextResponse.json({ items: [], error: `RSS fetch failed: ${res.status}` })
+    const enItems = await fetchRssItems(GSC_EN_RSS)
+    if (enItems) {
+      return NextResponse.json({ items: enItems })
     }
-    const xml = await res.text()
-    const items = parseRssItems(xml)
-    return NextResponse.json({ items })
+    const jaItems = await fetchRssItems(GSC_JA_RSS)
+    if (jaItems) {
+      return NextResponse.json({ items: jaItems })
+    }
+    return NextResponse.json({ items: [], error: 'RSS fetch failed: no items returned' })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     return NextResponse.json({ items: [], error: message })

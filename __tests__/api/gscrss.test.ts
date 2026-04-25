@@ -33,14 +33,17 @@ describe('GET /api/gscrss', () => {
   })
 
   it('returns items:[] and error message when upstream returns 403', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ ok: false, status: 403 }))
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce({ ok: false, status: 403 })
+      .mockResolvedValueOnce({ ok: false, status: 403 }),
+    )
 
     const req = makeRequest()
     const res = await GET(req)
     const data = await res.json() as { items: unknown[]; error: string }
 
     expect(data.items).toEqual([])
-    expect(data.error).toBe('RSS fetch failed: 403')
+    expect(data.error).toBe('RSS fetch failed: no items returned')
     vi.unstubAllGlobals()
   })
 
@@ -74,7 +77,7 @@ describe('GET /api/gscrss', () => {
     vi.unstubAllGlobals()
   })
 
-  it('uses default rsshub URL when no param provided', async () => {
+  it('uses default GSC EN RSS URL when no param provided', async () => {
     let capturedUrl: string | null = null
     vi.stubGlobal('fetch', vi.fn().mockImplementationOnce(async (url: string) => {
       capturedUrl = url
@@ -83,7 +86,28 @@ describe('GET /api/gscrss', () => {
 
     const req = makeRequest()
     await GET(req)
-    expect(capturedUrl).toBe('https://rsshub.app/goodsmile/news')
+    expect(capturedUrl).toBe('https://www.goodsmile.info/en/rss')
+    vi.unstubAllGlobals()
+  })
+
+  it('falls back to JA RSS when EN feed returns no items', async () => {
+    const EMPTY_RSS = `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel></channel></rss>`
+    const capturedUrls: string[] = []
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string) => {
+      capturedUrls.push(url)
+      if (url.includes('/en/rss')) {
+        return { ok: true, text: async () => EMPTY_RSS }
+      }
+      return { ok: true, text: async () => SAMPLE_RSS }
+    }))
+
+    const req = makeRequest()
+    const res = await GET(req)
+    const data = await res.json() as { items: { title: string }[] }
+
+    expect(capturedUrls[0]).toBe('https://www.goodsmile.info/en/rss')
+    expect(capturedUrls[1]).toBe('https://www.goodsmile.info/ja/rss')
+    expect(data.items).toHaveLength(2)
     vi.unstubAllGlobals()
   })
 
