@@ -4,6 +4,7 @@ import { Search, ExternalLink, Inbox, X, Clock, Plus, RefreshCw, ChevronDown, Ch
 import { getProfile, getFollowingMap, toggleFollowAccount, getDiscoveryItems, updateDiscoveryItem, addWishlistItem, getUserSuggestedAccounts, addUserSuggestedAccount, removeUserSuggestedAccount } from '@/lib/storage'
 import { addDiscoveryItem } from '@/lib/storage'
 import type { FeedItem } from '@/app/api/feed/route'
+import type { GscRssItem } from '@/app/api/gscrss/route'
 import { extractFromOcrText, imageFileToBase64 } from '@/lib/ocr-utils'
 import { getVisionApiKey } from '@/lib/storage'
 import type { SocialAccount, DiscoveryItem } from '@/lib/types'
@@ -37,6 +38,9 @@ export default function DiscoveryPage() {
   const [userAccounts, setUserAccounts] = useState<SocialAccount[]>([])
   const [addAccountOpen, setAddAccountOpen] = useState(false)
   const [newAccount, setNewAccount] = useState({ handle: '', displayName: '', description: '', categories: [] as string[], platform: 'twitter' as 'twitter' | 'instagram' })
+  const [gscItems, setGscItems] = useState<GscRssItem[]>([])
+  const [gscLoading, setGscLoading] = useState(false)
+  const [gscError, setGscError] = useState<string | null>(null)
 
   useEffect(() => {
     setFollowing(getFollowingMap())
@@ -256,6 +260,25 @@ export default function DiscoveryPage() {
     setUserAccounts(getUserSuggestedAccounts())
   }
 
+  const handleLoadGsc = async () => {
+    setGscLoading(true)
+    setGscError(null)
+    try {
+      const res = await fetch('/api/gscrss')
+      const data = await res.json() as { items: GscRssItem[]; error?: string }
+      if (data.error) {
+        setGscError(data.error)
+        setGscItems(data.items ?? [])
+      } else {
+        setGscItems(data.items)
+      }
+    } catch (e) {
+      setGscError(e instanceof Error ? e.message : 'Failed to load GSC feed')
+    } finally {
+      setGscLoading(false)
+    }
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">Discovery</h1>
@@ -393,6 +416,36 @@ export default function DiscoveryPage() {
                   </div>
                 ))}
                 {searchLinks.length === 0 && <p className="text-gray-400 text-sm col-span-2">Add keywords in Settings to generate links.</p>}
+              </div>
+            )}
+          </div>
+
+          {/* Good Smile News */}
+          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold text-gray-900 dark:text-gray-100">Good Smile News</h2>
+              <button
+                onClick={handleLoadGsc}
+                disabled={gscLoading}
+                className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${gscLoading ? 'animate-spin' : ''}`} />
+                {gscLoading ? 'Loading…' : 'Load GSC News'}
+              </button>
+            </div>
+            {gscError && <p className="text-sm text-red-500 mb-3">{gscError}</p>}
+            {gscItems.length === 0 && !gscLoading && !gscError && (
+              <p className="text-gray-400 text-sm text-center py-4">Click &quot;Load GSC News&quot; to fetch the latest Good Smile Company news.</p>
+            )}
+            {gscItems.length > 0 && (
+              <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                {gscItems.map((item) => (
+                  <a key={item.link} href={item.link} target="_blank" rel="noopener noreferrer"
+                    className="block p-3 border border-gray-200 dark:border-gray-700 rounded-lg hover:border-indigo-300 dark:hover:border-indigo-600 transition-colors">
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100 leading-snug">{item.title}</p>
+                    <p className="text-xs text-gray-400 mt-1">{item.pubDate}</p>
+                  </a>
+                ))}
               </div>
             )}
           </div>
