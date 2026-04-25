@@ -14,6 +14,9 @@ export async function extractWithGemini(imageBase64: string, apiKey: string): Pr
     headers: { 'Content-Type': 'application/json', 'x-gemini-api-key': apiKey },
     body: JSON.stringify({ imageBase64 }),
   })
-  if (!res.ok) throw new Error('Gemini API error')
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { error?: string }
+    throw new Error(body.error ?? `Gemini API error (HTTP ${res.status})`)
+  }
   return res.json()
 }

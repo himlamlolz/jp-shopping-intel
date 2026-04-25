@@ -30,10 +30,11 @@ describe('extractWithGemini', () => {
   it('throws on non-OK response', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({
       ok: false,
-      json: async () => ({ error: 'API error' }),
+      status: 502,
+      json: async () => ({ error: 'API key not valid' }),
     }))
 
-    await expect(extractWithGemini('base64data', 'bad-key')).rejects.toThrow('Gemini API error')
+    await expect(extractWithGemini('base64data', 'bad-key')).rejects.toThrow('API key not valid')
     vi.unstubAllGlobals()
   })
 
