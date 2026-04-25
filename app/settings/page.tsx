@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { Settings, Plus, X, Check, AlertCircle, Download, Upload } from 'lucide-react'
-import { getProfile, saveProfile, getVisionApiKey, setVisionApiKey, getWishlist, saveWishlist, getDiscoveryItems, saveDiscoveryItems, mergeWishlist, mergeProfile, mergeDiscoveryItems, exportWishlistJson, exportWishlistCsv } from '@/lib/storage'
+import { getProfile, saveProfile, getVisionApiKey, setVisionApiKey, getGeminiApiKey, setGeminiApiKey, getWishlist, saveWishlist, getDiscoveryItems, saveDiscoveryItems, mergeWishlist, mergeProfile, mergeDiscoveryItems, exportWishlistJson, exportWishlistCsv } from '@/lib/storage'
 import { PROXY_SERVICE_PRESETS, type InterestProfile, type WishlistItem, type DiscoveryItem } from '@/lib/types'
 
 const CURRENCIES = ['USD','HKD','TWD','SGD','EUR','GBP','AUD','CAD','KRW','CNY']
@@ -11,6 +11,9 @@ export default function SettingsPage() {
   const [visionKey, setVisionKeyState] = useState('')
   const [keyStatus, setKeyStatus] = useState<'idle'|'testing'|'ok'|'fail'>('idle')
   const [keyError, setKeyError] = useState<string | null>(null)
+  const [geminiKey, setGeminiKeyState] = useState('')
+  const [geminiKeyStatus, setGeminiKeyStatus] = useState<'idle'|'testing'|'ok'|'fail'>('idle')
+  const [geminiKeyError, setGeminiKeyError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [newEnKw, setNewEnKw] = useState('')
   const [newJaKw, setNewJaKw] = useState('')
@@ -22,6 +25,7 @@ export default function SettingsPage() {
   useEffect(() => {
     setProfile(getProfile())
     setVisionKeyState(getVisionApiKey())
+    setGeminiKeyState(getGeminiApiKey())
   }, [])
 
   if (!profile) return null
@@ -31,6 +35,7 @@ export default function SettingsPage() {
   const handleSave = () => {
     saveProfile(profile)
     setVisionApiKey(visionKey)
+    setGeminiApiKey(geminiKey)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
@@ -82,6 +87,41 @@ export default function SettingsPage() {
         setKeyStatus('fail')
       }
     } catch { setKeyStatus('fail') }
+  }
+
+  const testGeminiKey = async () => {
+    setGeminiKeyStatus('testing')
+    setGeminiKeyError(null)
+    try {
+      const res = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-gemini-api-key': geminiKey },
+        body: JSON.stringify({ imageBase64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==' }),
+      })
+      if (res.ok) {
+        setGeminiKeyStatus('ok')
+      } else {
+        let msg: string
+        try {
+          const body = await res.json() as { error?: string; code?: number; status?: string }
+          const { error: rawError, code, status } = body
+          if (status === 'PERMISSION_DENIED' || code === 403) {
+            msg = 'API key not valid or Gemini API not enabled'
+          } else if (status === 'RESOURCE_EXHAUSTED' || code === 429) {
+            msg = 'Quota exceeded — free tier limit reached'
+          } else if (status === 'INVALID_ARGUMENT' || code === 400) {
+            msg = 'Invalid API key format'
+          } else {
+            msg = rawError ?? 'Unknown error'
+            if (status) msg += ` (${status})`
+          }
+        } catch {
+          msg = 'Unexpected response from server'
+        }
+        setGeminiKeyError(msg)
+        setGeminiKeyStatus('fail')
+      }
+    } catch { setGeminiKeyStatus('fail') }
   }
 
   const handleExport = () => {
@@ -224,6 +264,25 @@ export default function SettingsPage() {
           {keyStatus === 'ok' && <p className="text-xs text-green-600 mt-1 flex items-center gap-1"><Check className="w-3 h-3" /> API key valid</p>}
           {keyStatus === 'fail' && (
             <p className="text-xs text-red-600 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {keyError ?? 'API key invalid or quota exceeded'}</p>
+          )}
+        </section>
+
+        {/* Gemini API */}
+        <section className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6">
+          <h2 className="font-semibold text-gray-900 dark:text-gray-100 mb-1">Gemini API Key (AI Autofill)</h2>
+          <p className="text-xs text-gray-500 mb-4">Enables smart autofill of all fields from screenshots. Uses Gemini 2.0 Flash. Get a key at <a href="https://aistudio.google.com" target="_blank" rel="noopener noreferrer" className="underline">aistudio.google.com</a> — free tier available. Stored on this device only.</p>
+          <div className="flex gap-2">
+            <input type="password" value={geminiKey} onChange={e => { setGeminiKeyState(e.target.value); setGeminiKeyStatus('idle'); setGeminiKeyError(null) }}
+              placeholder="AIza..."
+              className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm font-mono" />
+            <button onClick={testGeminiKey} disabled={!geminiKey || geminiKeyStatus==='testing'}
+              className="px-3 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg text-sm hover:bg-gray-200 disabled:opacity-50">
+              {geminiKeyStatus==='testing' ? '...' : 'Test'}
+            </button>
+          </div>
+          {geminiKeyStatus === 'ok' && <p className="text-xs text-green-600 mt-1 flex items-center gap-1"><Check className="w-3 h-3" /> Gemini API key valid</p>}
+          {geminiKeyStatus === 'fail' && (
+            <p className="text-xs text-red-600 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {geminiKeyError ?? 'API key invalid or quota exceeded'}</p>
           )}
         </section>
 
