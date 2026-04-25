@@ -83,17 +83,28 @@ export function extractFromOcrText(text: string, keywords?: string[]): OcrExtrac
   let title: string | undefined
   if (bestLine && bestLine.length < 25) {
     const bestIdx = lines.indexOf(bestLine)
-    const adjacent = [-2, -1, 1, 2]
-      .map(offset => lines[bestIdx + offset])
-      .filter((l): l is string => !!l && l.length > 3 && !isJunkLine(l) && /[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9fff]/.test(l))
+    // Only gather truly consecutive qualifying lines (stop at the first non-qualifying line)
+    const before: string[] = []
+    for (let offset = -1; offset >= -2; offset--) {
+      const l = lines[bestIdx + offset]
+      if (l && l.length > 3 && !isJunkLine(l) && /[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9fff]/.test(l)) {
+        before.unshift(l)
+      } else {
+        break
+      }
+    }
+    const after: string[] = []
+    for (let offset = 1; offset <= 2; offset++) {
+      const l = lines[bestIdx + offset]
+      if (l && l.length > 3 && !isJunkLine(l) && /[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9fff]/.test(l)) {
+        after.push(l)
+      } else {
+        break
+      }
+    }
+    const adjacent = [...before, ...after]
     if (adjacent.length > 0) {
-      // Sort adjacent lines by their original position and join with the best line
-      const combined = [bestLine, ...adjacent]
-        .map(l => ({ l, idx: lines.indexOf(l) }))
-        .sort((a, b) => a.idx - b.idx)
-        .map(x => x.l)
-        .join('　')
-      title = combined
+      title = [...before, bestLine, ...after].join('　')
     } else {
       title = bestLine
     }

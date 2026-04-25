@@ -197,8 +197,7 @@ describe('extractFromOcrText', () => {
         '¥1,200',
       ].join('\n')
       const result = extractFromOcrText(text)
-      expect(result.title).toContain('ちいかわくじ')
-      expect(result.title).toContain('D賞')
+      expect(result.title).toBe('ちいかわくじ　もちっとふわっとコレクション　D賞　まんまるポーチ　うさぎ　②')
     })
   })
 
