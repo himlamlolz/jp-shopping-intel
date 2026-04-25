@@ -53,18 +53,58 @@ export function extractFromOcrText(text: string, keywords?: string[]): OcrExtrac
     ? lines.findIndex(l => l.includes(priceMatch[0]))
     : -1
 
-  const candidateLines = priceLineIdx > 0
+  const UI_LABEL_PATTERNS = [
+    '商品の説明', '商品の情報', 'カテゴリー', '発送元の地域',
+    '配送サービス', '支払い方法', '商品の状態', '購入手続きへ',
+    'ログイン', '会員登録', 'なにをお探しですか',
+  ]
+
+  const isJunkLine = (l: string): boolean => {
+    // Breadcrumb navigation
+    if (l.includes('＞') || l.includes('>')) return true
+    // Breadcrumb root
+    if (l.startsWith('ホーム')) return true
+    // Common UI labels
+    if (UI_LABEL_PATTERNS.some(pat => l === pat || l.includes(pat))) return true
+    // Lines with no CJK characters (purely numbers/symbols)
+    if (!/[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9fff]/.test(l)) return true
+    return false
+  }
+
+  const candidateLines = (priceLineIdx > 0
     ? japaneseLines.filter(l => lines.indexOf(l) < priceLineIdx)
     : japaneseLines
+  ).filter(l => l.length > 5 && !isJunkLine(l))
 
-  const title = candidateLines
-    .filter(l => l.length > 5) // ignore short UI labels
-    .sort((a, b) => b.length - a.length)[0]
-    ?? japaneseLines.filter(l => l.length > 5).sort((a, b) => b.length - a.length)[0]
-    ?? japaneseLines[0]
-    ?? lines[0]
+  // Pick best single-line candidate (longest)
+  const bestLine = candidateLines.sort((a, b) => b.length - a.length)[0]
 
-  if (title) confidence.title = japaneseLines.length > 0 ? 'medium' : 'low'
+  // If the best candidate is short, try joining adjacent lines to reconstruct a wrapped title
+  let title: string | undefined
+  if (bestLine && bestLine.length < 25) {
+    const bestIdx = lines.indexOf(bestLine)
+    const adjacent = [-2, -1, 1, 2]
+      .map(offset => lines[bestIdx + offset])
+      .filter((l): l is string => !!l && l.length > 3 && !isJunkLine(l) && /[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9fff]/.test(l))
+    if (adjacent.length > 0) {
+      // Sort adjacent lines by their original position and join with the best line
+      const combined = [bestLine, ...adjacent]
+        .map(l => ({ l, idx: lines.indexOf(l) }))
+        .sort((a, b) => a.idx - b.idx)
+        .map(x => x.l)
+        .join('　')
+      title = combined
+    } else {
+      title = bestLine
+    }
+  } else {
+    title = bestLine
+      ?? japaneseLines.filter(l => l.length > 5).sort((a, b) => b.length - a.length)[0]
+      ?? japaneseLines[0]
+      ?? lines[0]
+  }
+
+  if (title) confidence.title = japaneseLines.length > 0 ? 'high' : 'low'
 
   return { title, price, listingId, manufacturer, seriesName, janCode, confidence }
 }

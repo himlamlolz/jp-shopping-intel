@@ -20,7 +20,7 @@ const CONDITIONS: Array<{ value: NonNullable<WishlistItem['condition']>; label: 
 ]
 
 const defaultForm = (): Partial<WishlistItem> => ({
-  title: '', titleJa: '', price: 0, currency: 'JPY',
+  title: '', price: 0, currency: 'JPY',
   sourcePlatform: 'other', status: 'watching', priority: 'medium', tags: [], notes: '',
 })
 
@@ -459,11 +459,6 @@ export default function AddPage() {
             </label>
             <input value={form.title ?? ''} onChange={e => setForm(f => ({...f, title: e.target.value}))}
               className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-900 text-sm ${ocrConfidence.title === 'low' ? 'border-amber-400' : 'border-gray-300 dark:border-gray-700'}`} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Japanese Title</label>
-            <input value={form.titleJa ?? ''} onChange={e => setForm(f => ({...f, titleJa: e.target.value}))}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>

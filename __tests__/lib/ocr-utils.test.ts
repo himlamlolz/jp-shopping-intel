@@ -152,9 +152,9 @@ describe('extractFromOcrText', () => {
       expect(result.title).toBe('FIGURE TITLE')
     })
 
-    it('sets medium confidence when Japanese text present', () => {
+    it('sets high confidence when Japanese text present', () => {
       const result = extractFromOcrText('日本語タイトル\n¥500')
-      expect(result.confidence.title).toBe('medium')
+      expect(result.confidence.title).toBe('high')
     })
 
     it('sets low confidence when no Japanese text', () => {
@@ -171,6 +171,34 @@ describe('extractFromOcrText', () => {
     it('returns undefined title for empty text', () => {
       const result = extractFromOcrText('')
       expect(result.title).toBeUndefined()
+    })
+
+    it('filters out breadcrumb lines containing ＞', () => {
+      const text = [
+        'ホーム＞ゲーム・おもちゃ・グッズ＞キャラクターグッズ＞バッグ・ポーチ',
+        'ちいかわくじ　もちっとふわっとコレクション',
+        '¥1,200',
+      ].join('\n')
+      const result = extractFromOcrText(text)
+      expect(result.title).not.toContain('＞')
+      expect(result.title).toContain('ちいかわくじ')
+    })
+
+    it('filters out lines starting with ホーム', () => {
+      const text = 'ホーム\n商品タイトルはここ\n¥500'
+      const result = extractFromOcrText(text)
+      expect(result.title).toBe('商品タイトルはここ')
+    })
+
+    it('joins adjacent short Japanese lines before the price', () => {
+      const text = [
+        'ちいかわくじ　もちっとふわっとコレクション',
+        'D賞　まんまるポーチ　うさぎ　②',
+        '¥1,200',
+      ].join('\n')
+      const result = extractFromOcrText(text)
+      expect(result.title).toContain('ちいかわくじ')
+      expect(result.title).toContain('D賞')
     })
   })
 

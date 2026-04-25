@@ -17,8 +17,8 @@ const CONDITIONS: Array<{ value: NonNullable<WishlistItem['condition']>; label: 
 ]
 const PLATFORMS: WishlistItem['sourcePlatform'][] = ['mercari','yahoo_auctions','surugaya','melonbooks','toranoana','amazon_jp','twitter','other']
 
-function buildTitleSearchLinks(title: string, titleJa?: string): Array<{ label: string; url: string }> {
-  const q = encodeURIComponent(titleJa ?? title)
+function buildTitleSearchLinks(title: string): Array<{ label: string; url: string }> {
+  const q = encodeURIComponent(title)
   return [
     { label: 'Mercari JP', url: `https://jp.mercari.com/search?keyword=${q}` },
     { label: 'Yahoo Auctions', url: `https://auctions.yahoo.co.jp/search/search?p=${q}` },
@@ -147,7 +147,7 @@ export default function ItemDetailPage() {
 
   const janCode = form.listingId && /^4\d{12}$/.test(form.listingId) ? form.listingId : null
   const janLinks = janCode ? generateJanSearchLinks(janCode) : null
-  const titleLinks = buildTitleSearchLinks(form.title ?? item.title, form.titleJa)
+  const titleLinks = buildTitleSearchLinks(form.title ?? item.title)
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
@@ -174,11 +174,6 @@ export default function ItemDetailPage() {
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Title</label>
           <input value={form.title ?? ''} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm" />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Japanese Title</label>
-          <input value={form.titleJa ?? ''} onChange={e => setForm(f => ({ ...f, titleJa: e.target.value }))}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm" />
         </div>
         <div className="grid grid-cols-2 gap-3">
