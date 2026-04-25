@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 
 export interface GscRssItem {
   title: string
@@ -28,9 +28,26 @@ function parseRssItems(xml: string): GscRssItem[] {
   return items
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const rsshubParam = req.nextUrl.searchParams.get('rsshub')
+
+  let rsshub = 'https://rsshub.app'
+  if (rsshubParam) {
+    try {
+      const parsed = new URL(rsshubParam)
+      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+        return NextResponse.json({ error: 'Invalid rsshub URL.' }, { status: 400 })
+      }
+      rsshub = `${parsed.protocol}//${parsed.host}`
+    } catch {
+      return NextResponse.json({ error: 'Invalid rsshub URL.' }, { status: 400 })
+    }
+  }
+
+  const feedUrl = `${rsshub}/goodsmile/news`
+
   try {
-    const res = await fetch('https://rsshub.app/goodsmile/news', {
+    const res = await fetch(feedUrl, {
       headers: { 'User-Agent': 'jp-shopping-intel/1.0' },
       next: { revalidate: 3600 },
     })

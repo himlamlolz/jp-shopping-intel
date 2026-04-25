@@ -22,7 +22,9 @@ export default function CalendarPage() {
 
     // Feature 2: Fetch GSC releases
     setGscLoading(true)
-    fetch('/api/gscrss')
+    const rsshubUrl = getProfile().rsshubUrl
+    const gscUrl = rsshubUrl ? `/api/gscrss?rsshub=${encodeURIComponent(rsshubUrl)}` : '/api/gscrss'
+    fetch(gscUrl)
       .then(r => r.json())
       .then((d: { items: GscRssItem[]; error?: string }) => {
         if (d.error) setGscError(d.error)
