@@ -1,8 +1,9 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { Search, ExternalLink, Inbox, X, Clock, Plus } from 'lucide-react'
+import { Search, ExternalLink, Inbox, X, Clock, Plus, RefreshCw } from 'lucide-react'
 import { getProfile, getFollowingMap, toggleFollowAccount, getDiscoveryItems, updateDiscoveryItem, addWishlistItem } from '@/lib/storage'
 import { addDiscoveryItem } from '@/lib/storage'
+import type { FeedItem } from '@/app/api/feed/route'
 import { extractFromOcrText, imageFileToBase64 } from '@/lib/ocr-utils'
 import { getVisionApiKey } from '@/lib/storage'
 import type { SocialAccount, DiscoveryItem } from '@/lib/types'
@@ -31,6 +32,7 @@ export default function DiscoveryPage() {
   const [ocrLoading, setOcrLoading] = useState(false)
   const [keywords, setKeywords] = useState<Array<{ en?: string; ja?: string }>>([])
   const [linksOpen, setLinksOpen] = useState(false)
+  const [fetchingFeed, setFetchingFeed] = useState<Record<number, boolean>>({})
 
   useEffect(() => {
     setFollowing(getFollowingMap())
@@ -67,10 +69,10 @@ export default function DiscoveryPage() {
   const jaKeywords = keywords.flatMap(k => [k.ja, k.en]).filter(Boolean) as string[]
   const searchLinks = [
     ...jaKeywords.flatMap(kw => [
-      { label: `${kw} 新商品`, url: `https://twitter.com/search?q=${encodeURIComponent(kw+' 新商品')}&f=live`, platform: '𝕏 New Products' },
-      { label: `${kw} 限定`, url: `https://twitter.com/search?q=${encodeURIComponent(kw+' 限定')}&f=live`, platform: '𝕏 Limited' },
-      { label: `${kw} — Mercari`, url: `https://jp.mercari.com/search?keyword=${encodeURIComponent(kw)}`, platform: 'Mercari' },
-      { label: `${kw} — Suruga-ya`, url: `https://www.suruga-ya.jp/search/?search=${encodeURIComponent(kw)}`, platform: 'Suruga-ya' },
+      { label: `${kw} 新商品`, url: `https://twitter.com/search?q=${encodeURIComponent(kw+' 新商品')}&f=live`, platform: '𝕏 New Products', feedType: 'twitter' as const, feedKeyword: `${kw} 新商品` },
+      { label: `${kw} 限定`, url: `https://twitter.com/search?q=${encodeURIComponent(kw+' 限定')}&f=live`, platform: '𝕏 Limited', feedType: 'twitter' as const, feedKeyword: `${kw} 限定` },
+      { label: `${kw} — Mercari`, url: `https://jp.mercari.com/search?keyword=${encodeURIComponent(kw)}`, platform: 'Mercari', feedType: 'mercari' as const, feedKeyword: kw },
+      { label: `${kw} — Suruga-ya`, url: `https://www.suruga-ya.jp/search/?search=${encodeURIComponent(kw)}`, platform: 'Suruga-ya', feedType: null, feedKeyword: null },
     ])
   ]
 
@@ -143,6 +145,40 @@ export default function DiscoveryPage() {
 
   const daysUntilDismiss = (date: Date) => Math.max(0, Math.ceil((date.getTime() - Date.now()) / (24*60*60*1000)))
 
+  const handleFetchFeed = async (index: number, feedType: 'twitter' | 'mercari', feedKeyword: string) => {
+    setFetchingFeed(prev => ({ ...prev, [index]: true }))
+    try {
+      const res = await fetch(
+        `/api/feed?type=${feedType}&keyword=${encodeURIComponent(feedKeyword)}`
+      )
+      if (!res.ok) return
+      const data = await res.json() as { items: FeedItem[] }
+      const existingSourceIds = new Set(
+        getDiscoveryItems().map(i => i.sourceId).filter(Boolean)
+      )
+      let added = 0
+      for (const item of data.items) {
+        if (existingSourceIds.has(item.guid)) continue
+        const discoveryItem: DiscoveryItem = {
+          id: uuidv4(),
+          sourceAccountHandle: `search:${feedKeyword}`,
+          sourcePlatform: feedType,
+          sourceId: item.guid,
+          suggestedTitle: item.title || item.description?.slice(0, 80) || 'Unknown Item',
+          suggestedTags: [],
+          status: 'inbox',
+          createdAt: new Date(),
+          autoDismissAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        }
+        addDiscoveryItem(discoveryItem)
+        added++
+      }
+      if (added > 0) setInboxItems(getDiscoveryItems().filter(i => i.status === 'inbox'))
+    } finally {
+      setFetchingFeed(prev => ({ ...prev, [index]: false }))
+    }
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">Discovery</h1>
@@ -209,11 +245,23 @@ export default function DiscoveryPage() {
             {linksOpen && (
               <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {searchLinks.map((link, i) => (
-                  <a key={i} href={link.url} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center justify-between gap-2 p-2.5 border border-gray-200 dark:border-gray-700 rounded-lg hover:border-indigo-300 transition-colors text-sm">
-                    <span className="truncate text-gray-700 dark:text-gray-300">{link.label}</span>
-                    <span className="text-xs text-gray-400 shrink-0">{link.platform}</span>
-                  </a>
+                  <div key={i} className="flex items-center gap-1">
+                    <a href={link.url} target="_blank" rel="noopener noreferrer"
+                      className="flex flex-1 items-center justify-between gap-2 p-2.5 border border-gray-200 dark:border-gray-700 rounded-lg hover:border-indigo-300 transition-colors text-sm min-w-0">
+                      <span className="truncate text-gray-700 dark:text-gray-300">{link.label}</span>
+                      <span className="text-xs text-gray-400 shrink-0">{link.platform}</span>
+                    </a>
+                    {link.feedType && (
+                      <button
+                        onClick={() => handleFetchFeed(i, link.feedType!, link.feedKeyword!)}
+                        disabled={fetchingFeed[i]}
+                        title="Fetch feed into inbox"
+                        className="shrink-0 p-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 hover:border-indigo-400 hover:text-indigo-600 disabled:opacity-40 transition-colors"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${fetchingFeed[i] ? 'animate-spin' : ''}`} />
+                      </button>
+                    )}
+                  </div>
                 ))}
                 {searchLinks.length === 0 && <p className="text-gray-400 text-sm col-span-2">Add keywords in Settings to generate links.</p>}
               </div>
