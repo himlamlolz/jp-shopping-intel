@@ -65,15 +65,17 @@ describe('POST /api/ocr', () => {
   it('returns 502 when Vision API returns an error response', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({
       ok: false,
-      json: async () => ({ error: { message: 'Invalid API key' } }),
+      json: async () => ({ error: { message: 'Invalid API key', code: 400, status: 'INVALID_ARGUMENT' } }),
     }))
 
     const req = makeRequest({ imageBase64: 'base64data' }, 'bad-key')
     const response = await POST(req)
-    const data = await response.json() as { error: string }
+    const data = await response.json() as { error: string; code: number; status: string }
 
     expect(response.status).toBe(502)
     expect(data.error).toBe('Invalid API key')
+    expect(data.code).toBe(400)
+    expect(data.status).toBe('INVALID_ARGUMENT')
     vi.unstubAllGlobals()
   })
 
@@ -85,10 +87,12 @@ describe('POST /api/ocr', () => {
 
     const req = makeRequest({ imageBase64: 'base64data' }, 'bad-key')
     const response = await POST(req)
-    const data = await response.json() as { error: string }
+    const data = await response.json() as { error: string; code: undefined; status: undefined }
 
     expect(response.status).toBe(502)
     expect(data.error).toBe('Vision API error')
+    expect(data.code).toBeUndefined()
+    expect(data.status).toBeUndefined()
     vi.unstubAllGlobals()
   })
 
